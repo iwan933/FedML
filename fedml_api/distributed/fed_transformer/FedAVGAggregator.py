@@ -1,18 +1,16 @@
-import copy
 import logging
 import time
 
-import torch
-import wandb
 import numpy as np
-from torch import nn
+import wandb
 
 from fedml_api.distributed.fed_transformer.utils import transform_list_to_tensor
 
 
 class FedAVGAggregator(object):
     def __init__(self, train_global, test_global, all_train_data_num,
-                 train_data_local_dict, test_data_local_dict, train_data_local_num_dict, worker_num, device, model, args):
+                 train_data_local_dict, test_data_local_dict, train_data_local_num_dict, worker_num, device, model,
+                 args):
         self.train_global = train_global
         self.test_global = test_global
         self.all_train_data_num = all_train_data_num
