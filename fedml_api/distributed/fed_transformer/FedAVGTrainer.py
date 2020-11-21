@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from os import path
 
@@ -60,8 +61,21 @@ class FedAVGTrainer(object):
         self.model.eval()
         self.model.to(self.device)
 
-        path_train = "./extracted_features/" + str(self.client_index) + "-train.pkl"
-        path_test = "./extracted_features/" + str(self.client_index) + "-test.pkl"
+        if self.args.partition_method == "hetero":
+            directory_train = "./extracted_features/hetero/"
+            path_train = directory_train + str(self.client_index) + "-train.pkl"
+            directory_test = "./extracted_features/hetero/"
+            path_test = directory_test + str(self.client_index) + "-test.pkl"
+        else:
+            directory_train = "./extracted_features/homo/"
+            path_train = directory_train + str(self.client_index) + "-train.pkl"
+            directory_test = "./extracted_features/homo/"
+            path_test = directory_test + str(self.client_index) + "-test.pkl"
+        if not os.path.exists(directory_train):
+            os.makedirs(directory_train)
+        if not os.path.exists(directory_test):
+            os.makedirs(directory_test)
+
         train_data_extracted_features = dict()
         test_data_extracted_features = dict()
         if path.exists(path_train):

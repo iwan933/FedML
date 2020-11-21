@@ -7,10 +7,15 @@
 #  comm_round:
 #    values: [100, 150, 200]
 
-#sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 1 64 0.1 cifar10 "./../../../data/cifar10" 0 0
-#
-#sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 3 64 0.1 cifar10 "./../../../data/cifar10" 0 0
-#
+#For the CIFAR-10 dataset in FedML, the best parameters is lr=0.03, epochs=1, comm_rounds=50
+sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 1 64 0.03 cifar10 "./../../../data/cifar10" 0 0
+
+
+# sweep
+sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 1 64 0.1 cifar10 "./../../../data/cifar10" 0 0
+
+sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 3 64 0.1 cifar10 "./../../../data/cifar10" 0 0
+
 sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 5 64 0.1 cifar10 "./../../../data/cifar10" 0 0
 
 sh run_fed_transformer.sh 10 10 1 4 transformer homo 100 8 64 0.1 cifar10 "./../../../data/cifar10" 0 0
