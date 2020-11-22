@@ -221,7 +221,7 @@ if __name__ == "__main__":
     # Note if the model is DNN (e.g., ResNet), the training will be very slow.
     # In this case, please use our FedML distributed version (./fedml_experiments/distributed_fedavg)
     # model = create_model(args, model_name=args.model, output_dim=dataset[7])
-    model = create_model(args, model_name=args.model, output_dim=10)
+    model = create_model(args, model_name=args.model, output_dim=class_num)
 
     # start "federated averaging (FedAvg)"
     FedML_Fed_Transformer_distributed(process_id, worker_number, device, comm,
