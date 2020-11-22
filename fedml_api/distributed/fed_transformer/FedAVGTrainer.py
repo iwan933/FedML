@@ -62,14 +62,14 @@ class FedAVGTrainer(object):
         self.model.to(self.device)
 
         if self.args.partition_method == "hetero":
-            directory_train = "./extracted_features/hetero/"
+            directory_train = "./extracted_features/" + self.args.dataset + "/hetero/"
             path_train = directory_train + str(self.client_index) + "-train.pkl"
-            directory_test = "./extracted_features/hetero/"
+            directory_test = "./extracted_features/" + self.args.dataset + "/hetero/"
             path_test = directory_test + str(self.client_index) + "-test.pkl"
         else:
-            directory_train = "./extracted_features/homo/"
+            directory_train = "./extracted_features/" + self.args.dataset + "/homo/"
             path_train = directory_train + str(self.client_index) + "-train.pkl"
-            directory_test = "./extracted_features/homo/"
+            directory_test = "./extracted_features/" + self.args.dataset + "/homo/"
             path_test = directory_test + str(self.client_index) + "-test.pkl"
         if not os.path.exists(directory_train):
             os.makedirs(directory_train)
