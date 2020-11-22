@@ -4,16 +4,17 @@ import numpy as np
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
+from PIL import Image
+from torch.utils.data import RandomSampler, SequentialSampler, DataLoader
+from torchvision import datasets
+from torchvision.datasets.samplers import DistributedSampler
 
 from fedml_api.data_preprocessing.cifar100.datasets import CIFAR100_truncated
-
-logging.basicConfig()
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from fedml_core.non_iid_partition.noniid_partition import non_iid_partition_with_dirichlet_distribution, record_data_stats
 
 
 # generate the non-IID distribution for all methods
-def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):
+def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR100/distribution.txt'):
     distribution = {}
     with open(filename, 'r') as data:
         for x in data.readlines():
@@ -28,7 +29,7 @@ def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/C
     return distribution
 
 
-def read_net_dataidx_map(filename='./data_preprocessing/non-iid-distribution/CIFAR10/net_dataidx_map.txt'):
+def read_net_dataidx_map(filename='./data_preprocessing/non-iid-distribution/CIFAR100/net_dataidx_map.txt'):
     net_dataidx_map = {}
     with open(filename, 'r') as data:
         for x in data.readlines():
@@ -76,42 +77,60 @@ class Cutout(object):
         return img
 
 
-def _data_transforms_cifar100():
+def _data_transforms_cifar100(args=None):
     CIFAR_MEAN = [0.5071, 0.4865, 0.4409]
     CIFAR_STD = [0.2673, 0.2564, 0.2762]
 
-    train_transform = transforms.Compose([
-        transforms.ToPILImage(),
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
-    ])
+    if args is not None:
+        train_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize(args.img_size),
+            transforms.RandomCrop(args.img_size),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
 
-    train_transform.transforms.append(Cutout(16))
+        valid_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.Resize((args.img_size, args.img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
+    else:
+        train_transform = transforms.Compose([
+            transforms.ToPILImage(),
+            transforms.RandomCrop(32, padding=4),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
 
-    valid_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
-    ])
+        train_transform.transforms.append(Cutout(16))
+
+        valid_transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
 
     return train_transform, valid_transform
 
-def load_cifar100_data(datadir):
-    train_transform, test_transform = _data_transforms_cifar100()
 
-    cifar10_train_ds = CIFAR100_truncated(datadir, train=True, download=True, transform=train_transform)
-    cifar10_test_ds = CIFAR100_truncated(datadir, train=False, download=True, transform=test_transform)
+def load_cifar100_data(datadir, args):
+    train_transform, test_transform = _data_transforms_cifar100(args)
 
-    X_train, y_train = cifar10_train_ds.data, cifar10_train_ds.target
-    X_test, y_test = cifar10_test_ds.data, cifar10_test_ds.target
+    cifar100_train_ds = CIFAR100_truncated(datadir, train=True, download=True, transform=train_transform)
+    cifar100_test_ds = CIFAR100_truncated(datadir, train=False, download=True, transform=test_transform)
+
+    X_train, y_train = cifar100_train_ds.data, cifar100_train_ds.target
+    X_test, y_test = cifar100_test_ds.data, cifar100_test_ds.target
 
     return (X_train, y_train, X_test, y_test)
 
 
-def partition_data(dataset, datadir, partition, n_nets, alpha):
+def partition_data(dataset, datadir, partition, n_nets, alpha, args=None):
     logging.info("*********partition data***************")
-    X_train, y_train, X_test, y_test = load_cifar100_data(datadir)
+    X_train, y_train, X_test, y_test = load_cifar100_data(datadir, args)
     n_train = X_train.shape[0]
     # n_test = X_test.shape[0]
 
@@ -122,29 +141,7 @@ def partition_data(dataset, datadir, partition, n_nets, alpha):
         net_dataidx_map = {i: batch_idxs[i] for i in range(n_nets)}
 
     elif partition == "hetero":
-        min_size = 0
-        K = 100
-        N = y_train.shape[0]
-        logging.info("N = " + str(N))
-        net_dataidx_map = {}
-
-        while min_size < 10:
-            idx_batch = [[] for _ in range(n_nets)]
-            # for each class in the dataset
-            for k in range(K):
-                idx_k = np.where(y_train == k)[0]
-                np.random.shuffle(idx_k)
-                proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
-                ## Balance
-                proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
-                proportions = proportions / proportions.sum()
-                proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
-                idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
-                min_size = min([len(idx_j) for idx_j in idx_batch])
-
-        for j in range(n_nets):
-            np.random.shuffle(idx_batch[j])
-            net_dataidx_map[j] = idx_batch[j]
+        net_dataidx_map = non_iid_partition_with_dirichlet_distribution(y_train, n_nets, 10, alpha)
 
     elif partition == "hetero-fix":
         dataidx_map_file_path = './data_preprocessing/non-iid-distribution/CIFAR100/net_dataidx_map.txt'
@@ -154,25 +151,25 @@ def partition_data(dataset, datadir, partition, n_nets, alpha):
         distribution_file_path = './data_preprocessing/non-iid-distribution/CIFAR100/distribution.txt'
         traindata_cls_counts = read_data_distribution(distribution_file_path)
     else:
-        traindata_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
+        traindata_cls_counts = record_data_stats(y_train, net_dataidx_map)
 
     return X_train, y_train, X_test, y_test, net_dataidx_map, traindata_cls_counts
 
 
 # for centralized training
-def get_dataloader(dataset, datadir, train_bs, test_bs, dataidxs=None):
-    return get_dataloader_CIFAR100(datadir, train_bs, test_bs, dataidxs)
+def get_dataloader(dataset, datadir, train_bs, test_bs, args=None, dataidxs=None):
+    return get_dataloader_CIFAR100(datadir, train_bs, test_bs, args=args, dataidxs=dataidxs)
 
 
 # for local devices
-def get_dataloader_test(dataset, datadir, train_bs, test_bs, dataidxs_train, dataidxs_test):
-    return get_dataloader_test_CIFAR100(datadir, train_bs, test_bs, dataidxs_train, dataidxs_test)
+def get_dataloader_test(dataset, datadir, train_bs, test_bs, dataidxs_train, dataidxs_test, args=None):
+    return get_dataloader_test_CIFAR100(datadir, train_bs, test_bs, dataidxs_train, dataidxs_test, args)
 
 
-def get_dataloader_CIFAR100(datadir, train_bs, test_bs, dataidxs=None):
+def get_dataloader_CIFAR100(datadir, train_bs, test_bs, args=None, dataidxs=None):
     dl_obj = CIFAR100_truncated
 
-    transform_train, transform_test = _data_transforms_cifar100()
+    transform_train, transform_test = _data_transforms_cifar100(args=args)
 
     train_ds = dl_obj(datadir, dataidxs=dataidxs, train=True, transform=transform_train, download=True)
     test_ds = dl_obj(datadir, train=False, transform=transform_test, download=True)
@@ -183,10 +180,10 @@ def get_dataloader_CIFAR100(datadir, train_bs, test_bs, dataidxs=None):
     return train_dl, test_dl
 
 
-def get_dataloader_test_CIFAR100(datadir, train_bs, test_bs, dataidxs_train=None, dataidxs_test=None):
+def get_dataloader_test_CIFAR100(datadir, train_bs, test_bs, dataidxs_train=None, dataidxs_test=None, args=None):
     dl_obj = CIFAR100_truncated
 
-    transform_train, transform_test = _data_transforms_cifar100()
+    transform_train, transform_test = _data_transforms_cifar100(args)
 
     train_ds = dl_obj(datadir, dataidxs=dataidxs_train, train=True, transform=transform_train, download=True)
     test_ds = dl_obj(datadir, dataidxs=dataidxs_test, train=False, transform=transform_test, download=True)
@@ -198,21 +195,21 @@ def get_dataloader_test_CIFAR100(datadir, train_bs, test_bs, dataidxs_train=None
 
 
 def load_partition_data_distributed_cifar100(process_id, dataset, data_dir, partition_method, partition_alpha,
-                                            client_number, batch_size):
+                                            client_number, batch_size, args=None):
     X_train, y_train, X_test, y_test, net_dataidx_map, traindata_cls_counts = partition_data(dataset,
                                                                                              data_dir,
                                                                                              partition_method,
                                                                                              client_number,
-                                                                                             partition_alpha)
+                                                                                             partition_alpha, args=args)
     class_num = len(np.unique(y_train))
     logging.info("traindata_cls_counts = " + str(traindata_cls_counts))
     train_data_num = sum([len(net_dataidx_map[r]) for r in range(client_number)])
 
     # get global test data
     if process_id == 0:
-        train_data_global, test_data_global = get_dataloader(dataset, data_dir, batch_size, batch_size)
+        train_data_global, test_data_global = get_dataloader(dataset, data_dir, batch_size, batch_size, args=args)
         logging.info("train_dl_global number = " + str(len(train_data_global)))
-        logging.info("test_dl_global number = " + str(len(train_data_global)))
+        logging.info("test_dl_global number = " + str(len(test_data_global)))
         train_data_local = None
         test_data_local = None
         local_data_num = 0
@@ -223,28 +220,28 @@ def load_partition_data_distributed_cifar100(process_id, dataset, data_dir, part
         logging.info("rank = %d, local_sample_number = %d" % (process_id, local_data_num))
         # training batch size = 64; algorithms batch size = 32
         train_data_local, test_data_local = get_dataloader(dataset, data_dir, batch_size, batch_size,
-                                                 dataidxs)
+                                                           args=args, dataidxs=dataidxs)
         logging.info("process_id = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
             process_id, len(train_data_local), len(test_data_local)))
         train_data_global = None
         test_data_global = None
-
     return train_data_num, train_data_global, test_data_global, local_data_num, train_data_local, test_data_local, class_num
 
 
-def load_partition_data_cifar100(dataset, data_dir, partition_method, partition_alpha, client_number, batch_size):
+def load_partition_data_cifar100(dataset, data_dir, partition_method, partition_alpha, client_number, batch_size,
+                                args=None):
     X_train, y_train, X_test, y_test, net_dataidx_map, traindata_cls_counts = partition_data(dataset,
                                                                                              data_dir,
                                                                                              partition_method,
                                                                                              client_number,
-                                                                                             partition_alpha)
+                                                                                             partition_alpha, args=args)
     class_num = len(np.unique(y_train))
     logging.info("traindata_cls_counts = " + str(traindata_cls_counts))
     train_data_num = sum([len(net_dataidx_map[r]) for r in range(client_number)])
 
-    train_data_global, test_data_global = get_dataloader(dataset, data_dir, batch_size, batch_size)
+    train_data_global, test_data_global = get_dataloader(dataset, data_dir, batch_size, batch_size, args=args)
     logging.info("train_dl_global number = " + str(len(train_data_global)))
-    logging.info("test_dl_global number = " + str(len(train_data_global)))
+    logging.info("test_dl_global number = " + str(len(test_data_global)))
     test_data_num = len(test_data_global)
 
     # get local dataset
@@ -260,10 +257,69 @@ def load_partition_data_cifar100(dataset, data_dir, partition_method, partition_
 
         # training batch size = 64; algorithms batch size = 32
         train_data_local, test_data_local = get_dataloader(dataset, data_dir, batch_size, batch_size,
-                                                 dataidxs)
+                                                           args=args, dataidxs=dataidxs)
         logging.info("client_idx = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
             client_idx, len(train_data_local), len(test_data_local)))
         train_data_local_dict[client_idx] = train_data_local
         test_data_local_dict[client_idx] = test_data_local
     return train_data_num, test_data_num, train_data_global, test_data_global, \
            data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+
+
+def load_cifar100_centralized_training_for_vit(args):
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+
+    transform_train = transforms.Compose([
+        transforms.RandomResizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        # transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+    transform_test = transforms.Compose([
+        transforms.Resize((args.img_size, args.img_size)),
+        transforms.ToTensor(),
+        #transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+
+    if args.dataset == "cifar10":
+        trainset = datasets.CIFAR10(root=args.data_dir,
+                                    train=True,
+                                    download=True,
+                                    transform=transform_train)
+        testset = datasets.CIFAR10(root=args.data_dir,
+                                   train=False,
+                                   download=True,
+                                   transform=transform_test) if args.is_distributed == 0 else None
+
+    else:
+        trainset = datasets.CIFAR100(root=args.data_dir,
+                                     train=True,
+                                     download=True,
+                                     transform=transform_train)
+        testset = datasets.CIFAR100(root=args.data_dir,
+                                    train=False,
+                                    download=True,
+                                    transform=transform_test) if args.is_distributed == 0 else None
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    train_sampler = RandomSampler(trainset) if args.is_distributed == 0 else DistributedSampler(trainset)
+    test_sampler = SequentialSampler(testset)
+    train_loader = DataLoader(trainset,
+                              sampler=train_sampler,
+                              batch_size=args.batch_size,
+                              num_workers=4,
+                              pin_memory=True)
+    test_loader = DataLoader(testset,
+                             sampler=test_sampler,
+                             batch_size=args.batch_size,
+                             num_workers=4,
+                             pin_memory=True) if testset is not None else None
+
+    return train_loader, test_loader

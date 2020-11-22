@@ -12,10 +12,6 @@ from torchvision.datasets.samplers import DistributedSampler
 from fedml_api.data_preprocessing.cifar10.datasets import CIFAR10_truncated
 from fedml_core.non_iid_partition.noniid_partition import non_iid_partition_with_dirichlet_distribution, record_data_stats
 
-logging.basicConfig()
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
 
 # generate the non-IID distribution for all methods
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):

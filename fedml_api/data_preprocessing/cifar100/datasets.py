@@ -1,39 +1,8 @@
-import logging
-
 import numpy as np
 import torch.utils.data as data
-from PIL import Image
 from torchvision.datasets import CIFAR100
 
-logging.basicConfig()
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-
 IMG_EXTENSIONS = ('.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm', '.tif', '.tiff', '.webp')
-
-
-def accimage_loader(path):
-    import accimage
-    try:
-        return accimage.Image(path)
-    except IOError:
-        # Potentially a decoding problem, fall back to PIL.Image
-        return pil_loader(path)
-
-
-def pil_loader(path):
-    # open path as file to avoid ResourceWarning (https://github.com/python-pillow/Pillow/issues/835)
-    with open(path, 'rb') as f:
-        img = Image.open(f)
-        return img.convert('RGB')
-
-
-def default_loader(path):
-    from torchvision import get_image_backend
-    if get_image_backend() == 'accimage':
-        return accimage_loader(path)
-    else:
-        return pil_loader(path)
 
 
 class CIFAR100_truncated(data.Dataset):
@@ -50,7 +19,7 @@ class CIFAR100_truncated(data.Dataset):
         self.data, self.target = self.__build_truncated_dataset__()
 
     def __build_truncated_dataset__(self):
-
+        print("download = " + str(self.download))
         cifar_dataobj = CIFAR100(self.root, self.train, self.transform, self.target_transform, self.download)
 
         if self.train:
