@@ -188,7 +188,7 @@ if __name__ == "__main__":
     if process_id == 0:
         wandb.init(
             project="fed_transformer",
-            name="FedTransformer(d)" + str(args.epochs) + "-lr" + str(args.lr),
+            name="d-" + str(args.dataset) + "-" + str(args.partition_method),
             config=args
         )
 
