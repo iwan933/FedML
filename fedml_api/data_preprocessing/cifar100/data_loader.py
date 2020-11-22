@@ -141,7 +141,7 @@ def partition_data(dataset, datadir, partition, n_nets, alpha, args=None):
         net_dataidx_map = {i: batch_idxs[i] for i in range(n_nets)}
 
     elif partition == "hetero":
-        net_dataidx_map = non_iid_partition_with_dirichlet_distribution(y_train, n_nets, 10, alpha)
+        net_dataidx_map = non_iid_partition_with_dirichlet_distribution(y_train, n_nets, 100, alpha)
 
     elif partition == "hetero-fix":
         dataidx_map_file_path = './data_preprocessing/non-iid-distribution/CIFAR100/net_dataidx_map.txt'
