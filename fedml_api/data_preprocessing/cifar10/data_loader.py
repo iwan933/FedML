@@ -10,6 +10,7 @@ from torchvision import datasets
 from torchvision.datasets.samplers import DistributedSampler
 
 from fedml_api.data_preprocessing.cifar10.datasets import CIFAR10_truncated
+from fedml_core.non_iid_partition.noniid_partition import non_iid_partition_with_dirichlet_distribution, record_data_stats
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -144,29 +145,7 @@ def partition_data(dataset, datadir, partition, n_nets, alpha, args=None):
         net_dataidx_map = {i: batch_idxs[i] for i in range(n_nets)}
 
     elif partition == "hetero":
-        min_size = 0
-        K = 10
-        N = y_train.shape[0]
-        logging.info("N = " + str(N))
-        net_dataidx_map = {}
-
-        while min_size < 10:
-            idx_batch = [[] for _ in range(n_nets)]
-            # for each class in the dataset
-            for k in range(K):
-                idx_k = np.where(y_train == k)[0]
-                np.random.shuffle(idx_k)
-                proportions = np.random.dirichlet(np.repeat(alpha, n_nets))
-                ## Balance
-                proportions = np.array([p * (len(idx_j) < N / n_nets) for p, idx_j in zip(proportions, idx_batch)])
-                proportions = proportions / proportions.sum()
-                proportions = (np.cumsum(proportions) * len(idx_k)).astype(int)[:-1]
-                idx_batch = [idx_j + idx.tolist() for idx_j, idx in zip(idx_batch, np.split(idx_k, proportions))]
-                min_size = min([len(idx_j) for idx_j in idx_batch])
-
-        for j in range(n_nets):
-            np.random.shuffle(idx_batch[j])
-            net_dataidx_map[j] = idx_batch[j]
+        net_dataidx_map = non_iid_partition_with_dirichlet_distribution(y_train, n_nets, 10, alpha)
 
     elif partition == "hetero-fix":
         dataidx_map_file_path = './data_preprocessing/non-iid-distribution/CIFAR10/net_dataidx_map.txt'
@@ -176,7 +155,7 @@ def partition_data(dataset, datadir, partition, n_nets, alpha, args=None):
         distribution_file_path = './data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'
         traindata_cls_counts = read_data_distribution(distribution_file_path)
     else:
-        traindata_cls_counts = record_net_data_stats(y_train, net_dataidx_map)
+        traindata_cls_counts = record_data_stats(y_train, net_dataidx_map)
 
     return X_train, y_train, X_test, y_test, net_dataidx_map, traindata_cls_counts
 
