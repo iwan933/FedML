@@ -16,13 +16,6 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
 from fedml_api.distributed.fed_transformer.utils import count_parameters
 from fedml_api.model.cv.transformer.vit.vision_transformer import VisionTransformer, CONFIGS
-from fedml_api.data_preprocessing.FederatedEMNIST.data_loader import load_partition_data_federated_emnist
-from fedml_api.data_preprocessing.fed_cifar100.data_loader import load_partition_data_federated_cifar100
-from fedml_api.data_preprocessing.fed_shakespeare.data_loader import load_partition_data_federated_shakespeare
-from fedml_api.data_preprocessing.shakespeare.data_loader import load_partition_data_shakespeare
-from fedml_api.data_preprocessing.stackoverflow_lr.data_loader import load_partition_data_federated_stackoverflow_lr
-from fedml_api.data_preprocessing.stackoverflow_nwp.data_loader import load_partition_data_federated_stackoverflow_nwp
-from fedml_api.data_preprocessing.MNIST.data_loader import load_partition_data_mnist
 
 from fedml_api.data_preprocessing.cifar10.data_loader import load_partition_data_cifar10
 from fedml_api.data_preprocessing.cifar100.data_loader import load_partition_data_cifar100
@@ -194,7 +187,6 @@ if __name__ == "__main__":
     # initialize the wandb machine learning experimental tracking platform (https://www.wandb.com/).
     if process_id == 0:
         wandb.init(
-            # project="federated_nas",
             project="fed_transformer",
             name="FedTransformer(d)" + str(args.epochs) + "-lr" + str(args.lr),
             config=args
@@ -233,5 +225,5 @@ if __name__ == "__main__":
 
     # start "federated averaging (FedAvg)"
     FedML_Fed_Transformer_distributed(process_id, worker_number, device, comm,
-                             model, train_data_num, train_data_global, test_data_global,
-                             train_data_local_num_dict, train_data_local_dict, test_data_local_dict, args)
+                                      model, train_data_num, train_data_global, test_data_global,
+                                      train_data_local_num_dict, train_data_local_dict, test_data_local_dict, args)

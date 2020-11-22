@@ -21,4 +21,5 @@ If you have installed tensorflow_federated, you can run
 ```
 python download_with_tff.py
 
+nohup python download_with_tff.py > landmarkdownload.txt 2>&1 &
 ```
