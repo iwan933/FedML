@@ -3,7 +3,7 @@
 
 If you do not have installed tensorflow, you can run (recommended way)
 ```
-python download_without_tff.py
+python download_without_tf.py
 
 ```
 

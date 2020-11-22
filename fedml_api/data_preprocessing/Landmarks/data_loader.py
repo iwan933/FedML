@@ -10,11 +10,7 @@ import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
 
-from datasets import Landmarks
-
-logging.basicConfig()
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from fedml_api.data_preprocessing.Landmarks.datasets import Landmarks
 
 
 def _read_csv(path: str):
@@ -83,7 +79,7 @@ def get_mapping_per_user(fn):
     mapping_table = _read_csv(fn)
     expected_cols = ['user_id', 'image_id', 'class']
     if not all(col in mapping_table[0].keys() for col in expected_cols):
-        logger.error('%s has wrong format.', mapping_file)
+        logger.error('%s has wrong format.', fn)
         raise ValueError(
             'The mapping file must contain user_id, image_id and class columns. '
             'The existing columns are %s' % ','.join(mapping_table[0].keys()))
@@ -191,9 +187,9 @@ def load_partition_data_landmarks(dataset, data_dir, fed_train_map_file, fed_tes
 
 
 if __name__ == '__main__':
-    data_dir = './cache/images'
-    fed_train_map_file = './cache/datasets/mini_gld_train_split.csv'
-    fed_test_map_file = './cache/datasets/mini_gld_test.csv'
+    data_dir = './../../../data/Landmarks/cache/images'
+    fed_train_map_file = './../../../data/Landmarks/cache/datasets/mini_gld_train_split.csv'
+    fed_test_map_file = './../../../data/Landmarks/cache/datasets/mini_gld_test.csv'
 
     client_number = 233
     train_data_num, test_data_num, train_data_global, test_data_global, \

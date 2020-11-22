@@ -4,8 +4,8 @@ import numpy as np
 import torch
 import torch.utils.data as data
 import torchvision.transforms as transforms
-from datasets import ImageNet
-from datasets import ImageNet_truncated
+
+from fedml_api.data_preprocessing.ImageNet.datasets import ImageNet, ImageNet_truncated
 
 logging.basicConfig()
 logger = logging.getLogger()
