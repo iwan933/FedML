@@ -14,6 +14,8 @@ import wandb
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 # add the FedML root directory to the python path
+from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 from fedml_api.data_preprocessing.cifar10.data_loader import get_dataloader, load_cifar10_centralized_training_for_vit
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
@@ -208,7 +210,6 @@ def train_and_eval(model, train_dl, test_dl, args, device):
     epoch_loss = []
     for epoch in range(args.epochs):
         train(epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features)
-        # weights = model.head.cpu().state_dict()
         eval(epoch, train_data_extracted_features, test_data_extracted_features)
 
 
@@ -284,15 +285,21 @@ if __name__ == "__main__":
             config=args
         )
 
+    # Dataset
+    if args.dataset == "cifar10":
+        train_dl, test_dl = load_cifar10_centralized_training_for_vit(args)
+        class_num = 10
+    elif args.dataset == "cifar100":
+        train_dl, test_dl = load_cifar100_centralized_training_for_vit(args)
+        class_num = 100
+
     # Model
-    model = create_model(args, model_name=args.model, output_dim=10)
+    model = create_model(args, model_name=args.model, output_dim=class_num)
     model.to(device)
     if args.is_distributed == 1:
         model = get_ddp_model(model, local_rank)
     if global_rank == 0:
         print(model)
-
-    train_dl, test_dl = load_cifar10_centralized_training_for_vit(args)
 
     train_and_eval(model, train_dl, test_dl, args, device)
 
