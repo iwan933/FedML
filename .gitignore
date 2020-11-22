@@ -55,3 +55,4 @@ mimiconda.sh
 
 data/fednlp/*
 *.npz
+data/Landmarks/*
