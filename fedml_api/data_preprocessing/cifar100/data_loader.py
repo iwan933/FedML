@@ -274,6 +274,7 @@ def load_cifar100_centralized_training_for_vit(args):
     CIFAR_STD = [0.2673, 0.2564, 0.2762]
 
     transform_train = transforms.Compose([
+        transforms.ToPILImage(),
         transforms.Resize(args.img_size),
         transforms.RandomCrop(args.img_size),
         transforms.RandomHorizontalFlip(),
@@ -287,6 +288,7 @@ def load_cifar100_centralized_training_for_vit(args):
     #     transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
     # ])
     transform_test = transforms.Compose([
+        transforms.ToPILImage(),
         transforms.Resize((args.img_size, args.img_size)),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),

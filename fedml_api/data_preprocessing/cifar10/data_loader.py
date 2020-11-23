@@ -272,7 +272,6 @@ def load_cifar10_centralized_training_for_vit(args):
     CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
 
     transform_train = transforms.Compose([
-        transforms.ToPILImage(),
         transforms.Resize(args.img_size),
         transforms.RandomCrop(args.img_size),
         transforms.RandomHorizontalFlip(),
