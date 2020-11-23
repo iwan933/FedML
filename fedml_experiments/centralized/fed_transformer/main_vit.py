@@ -14,9 +14,8 @@ import wandb
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 # add the FedML root directory to the python path
-from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
-
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
+from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
 from fedml_api.data_preprocessing.cifar10.data_loader import get_dataloader, load_cifar10_centralized_training_for_vit
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
