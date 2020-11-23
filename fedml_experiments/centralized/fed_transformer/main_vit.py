@@ -241,10 +241,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.001)
 
-    parser.add_argument("--warmup_steps", default=1, type=int,
+    parser.add_argument("--warmup_steps", default=3, type=int,
                         help="Step of training to perform learning rate warmup for.")
 
-    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=30, metavar='EP',
                         help='how many epochs will be trained locally')
 
     parser.add_argument("--img_size", default=224, type=int,
