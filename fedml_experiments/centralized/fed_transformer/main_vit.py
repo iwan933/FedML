@@ -2,22 +2,26 @@ import argparse
 import logging
 import os
 import random
+import socket
 import sys
 import time
 from os import path
 
 import numpy as np
+import psutil
 import torch
 import torch.distributed as dist
 import torch.nn as nn
 import wandb
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
+
+from fedml_api.data_preprocessing.cifar10.data_loader import load_cifar10_centralized_training_for_vit
+from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
+
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 # add the FedML root directory to the python path
-from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
-
-sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
-from fedml_api.data_preprocessing.cifar10.data_loader import get_dataloader, load_cifar10_centralized_training_for_vit
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
 from fedml_api.model.cv.transformer.vit.vision_transformer import VisionTransformer, CONFIGS
@@ -68,11 +72,19 @@ def create_model(args, model_name, output_dim):
     return model
 
 
-def _extract_features(model, train_dl, test_dl):
+def _extract_features(args, model, train_dl, test_dl):
     model.eval()
 
-    path_train = "./extracted_features/" + "train.pkl"
-    path_test = "./extracted_features/" + "test.pkl"
+    directory_train = "./extracted_features/" + args.dataset + "/"
+    path_train = directory_train + "train.pkl"
+    directory_test = "./extracted_features/" + args.dataset + "/"
+    path_test = directory_test + "test.pkl"
+
+    if not os.path.exists(directory_train):
+        os.makedirs(directory_train)
+    if not os.path.exists(directory_test):
+        os.makedirs(directory_test)
+
     train_data_extracted_features = dict()
     test_data_extracted_features = dict()
     if path.exists(path_train):
@@ -130,7 +142,7 @@ def _infer(data_extracted_features):
 
     time_end_test_per_batch = time.time()
 
-    logging.info("time per _infer = " + str(time_end_test_per_batch - time_start_test_per_batch))
+    # logging.info("time per _infer = " + str(time_end_test_per_batch - time_start_test_per_batch))
     return test_acc, test_total, test_loss
 
 
@@ -205,7 +217,7 @@ def train_and_eval(model, train_dl, test_dl, args, device):
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps,
                                          t_total=args.epochs)
 
-    train_data_extracted_features, test_data_extracted_features = _extract_features(model, train_dl, test_dl)
+    train_data_extracted_features, test_data_extracted_features = _extract_features(args, model, train_dl, test_dl)
 
     epoch_loss = []
     for epoch in range(args.epochs):
@@ -258,6 +270,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
     print(args)
 
+    # customize the log format
+    logging.basicConfig(level=logging.INFO,
+                        format=' - %(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                        datefmt='%a, %d %b %Y %H:%M:%S')
+    hostname = socket.gethostname()
+    logging.info("#############process ID = " +
+                 ", host name = " + hostname + "########" +
+                 ", process ID = " + str(os.getpid()) +
+                 ", process Name = " + str(psutil.Process(os.getpid())))
+
     # Set the random seed. The np.random seed determines the dataset partition.
     # The torch_manual_seed determines the initial weight.
     # We fix these two, so that we can reproduce the result.
@@ -270,7 +292,7 @@ if __name__ == "__main__":
     if args.is_distributed == 1:
         local_rank, global_rank = init_ddp()
     else:
-        local_rank = 0
+        local_rank = args.local_rank
         global_rank = 0
 
     # GPU
@@ -292,14 +314,15 @@ if __name__ == "__main__":
     elif args.dataset == "cifar100":
         train_dl, test_dl = load_cifar100_centralized_training_for_vit(args)
         class_num = 100
+    else:
+        train_dl, test_dl = load_cifar10_centralized_training_for_vit(args)
+        class_num = 10
 
     # Model
     model = create_model(args, model_name=args.model, output_dim=class_num)
     model.to(device)
     if args.is_distributed == 1:
         model = get_ddp_model(model, local_rank)
-    if global_rank == 0:
-        print(model)
 
     train_and_eval(model, train_dl, test_dl, args, device)
 

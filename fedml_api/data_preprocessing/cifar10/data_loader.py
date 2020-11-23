@@ -287,25 +287,15 @@ def load_cifar10_centralized_training_for_vit(args):
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
     ])
 
-    if args.dataset == "cifar10":
-        trainset = datasets.CIFAR10(root=args.data_dir,
-                                    train=True,
-                                    download=True,
-                                    transform=transform_train)
-        testset = datasets.CIFAR10(root=args.data_dir,
-                                   train=False,
-                                   download=True,
-                                   transform=transform_test) if args.is_distributed == 0 else None
+    trainset = datasets.CIFAR10(root=args.data_dir,
+                                train=True,
+                                download=True,
+                                transform=transform_train)
+    testset = datasets.CIFAR10(root=args.data_dir,
+                               train=False,
+                               download=True,
+                               transform=transform_test) if args.is_distributed == 0 else None
 
-    else:
-        trainset = datasets.CIFAR100(root=args.data_dir,
-                                     train=True,
-                                     download=True,
-                                     transform=transform_train)
-        testset = datasets.CIFAR100(root=args.data_dir,
-                                    train=False,
-                                    download=True,
-                                    transform=transform_test) if args.is_distributed == 0 else None
     if args.is_distributed == 1:
         torch.distributed.barrier()
 

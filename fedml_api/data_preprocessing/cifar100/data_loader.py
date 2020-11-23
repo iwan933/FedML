@@ -270,8 +270,8 @@ def load_cifar100_centralized_training_for_vit(args):
     if args.is_distributed == 1:
         torch.distributed.barrier()
 
-    CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
-    CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    CIFAR_MEAN = [0.5071, 0.4865, 0.4409]
+    CIFAR_STD = [0.2673, 0.2564, 0.2762]
 
     transform_train = transforms.Compose([
         transforms.Resize(args.img_size),
@@ -291,26 +291,14 @@ def load_cifar100_centralized_training_for_vit(args):
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
     ])
-
-    if args.dataset == "cifar10":
-        trainset = datasets.CIFAR10(root=args.data_dir,
-                                    train=True,
-                                    download=True,
-                                    transform=transform_train)
-        testset = datasets.CIFAR10(root=args.data_dir,
-                                   train=False,
-                                   download=True,
-                                   transform=transform_test) if args.is_distributed == 0 else None
-
-    else:
-        trainset = datasets.CIFAR100(root=args.data_dir,
-                                     train=True,
-                                     download=True,
-                                     transform=transform_train)
-        testset = datasets.CIFAR100(root=args.data_dir,
-                                    train=False,
-                                    download=True,
-                                    transform=transform_test) if args.is_distributed == 0 else None
+    trainset = datasets.CIFAR100(root=args.data_dir,
+                                 train=True,
+                                 download=True,
+                                 transform=transform_train)
+    testset = datasets.CIFAR100(root=args.data_dir,
+                                train=False,
+                                download=True,
+                                transform=transform_test) if args.is_distributed == 0 else None
     if args.is_distributed == 1:
         torch.distributed.barrier()
 
