@@ -2,11 +2,13 @@ import argparse
 import logging
 import os
 import random
+import socket
 import sys
 import time
 from os import path
 
 import numpy as np
+import psutil
 import torch
 import torch.distributed as dist
 import torch.nn as nn
@@ -256,6 +258,18 @@ if __name__ == "__main__":
                         help="Resolution size")
     args = parser.parse_args()
     print(args)
+
+    # customize the log format
+    process_id = 0
+    logging.basicConfig(level=logging.INFO,
+                        format=str(
+                            process_id) + ' - %(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                        datefmt='%a, %d %b %Y %H:%M:%S')
+    hostname = socket.gethostname()
+    logging.info("#############process ID = " + str(process_id) +
+                 ", host name = " + hostname + "########" +
+                 ", process ID = " + str(os.getpid()) +
+                 ", process Name = " + str(psutil.Process(os.getpid())))
 
     # Set the random seed. The np.random seed determines the dataset partition.
     # The torch_manual_seed determines the initial weight.
