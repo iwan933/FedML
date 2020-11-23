@@ -13,15 +13,13 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import wandb
+from torch.utils.data import RandomSampler, SequentialSampler, DataLoader, DistributedSampler
+from torchvision import transforms, datasets
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
-from fedml_api.data_preprocessing.cifar10.data_loader import load_cifar10_centralized_training_for_vit
-from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_centralized_training_for_vit
 
 from torch.nn.parallel import DistributedDataParallel as DDP
-
-# add the FedML root directory to the python path
 
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
@@ -181,12 +179,14 @@ def train(epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extract
         (x, labels) = train_data_extracted_features[batch_idx]
         x = x.to(device)
         labels = labels.to(device)
+        # x, label_a, label_b, lam = mixup_data(x, labels)
         # logging.info(images.shape)
         optimizer.zero_grad()
         log_probs = model.head(x)
         # print(log_probs.shape)
         # print(labels.shape)
         loss = criterion(log_probs, labels)
+        # loss = mixup_criterion(criterion, log_probs, label_a, label_b, lam)
         loss.backward()
         # according to ViT paper, all fine-tuned tasks do gradient clipping at global norm 1.
         torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
@@ -246,6 +246,74 @@ def mixup_data(x, y, alpha=1.0, use_cuda=True):
 
 def mixup_criterion(criterion, pred, y_a, y_b, lam):
     return lam * criterion(pred, y_a) + (1 - lam) * criterion(pred, y_b)
+
+
+def load_cifar_centralized_training_for_vit(args):
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    """
+    the std 0.5 normalization is proposed by BiT (Big Transfer), which can increase the accuracy around 3%
+    """
+    # CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    # CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    CIFAR_MEAN = [0.5, 0.5, 0.5]
+    CIFAR_STD = [0.5, 0.5, 0.5]
+
+    """
+    transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
+    """
+    transform_train = transforms.Compose([
+        # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+        transforms.Resize(args.img_size),
+        transforms.RandomCrop(args.img_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+    transform_test = transforms.Compose([
+        transforms.Resize((args.img_size, args.img_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+
+    if args.dataset == "cifar10":
+        trainset = datasets.CIFAR10(root=args.data_dir,
+                                    train=True,
+                                    download=True,
+                                    transform=transform_train)
+        testset = datasets.CIFAR10(root=args.data_dir,
+                                   train=False,
+                                   download=True,
+                                   transform=transform_test) if args.is_distributed == 0 else None
+    else:
+        trainset = datasets.CIFAR100(root=args.data_dir,
+                                    train=True,
+                                    download=True,
+                                    transform=transform_train)
+        testset = datasets.CIFAR100(root=args.data_dir,
+                                   train=False,
+                                   download=True,
+                                   transform=transform_test) if args.is_distributed == 0 else None
+
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    train_sampler = RandomSampler(trainset) if args.is_distributed == 0 else DistributedSampler(trainset)
+    test_sampler = SequentialSampler(testset)
+    train_loader = DataLoader(trainset,
+                              sampler=train_sampler,
+                              batch_size=args.batch_size,
+                              num_workers=4,
+                              pin_memory=True)
+    test_loader = DataLoader(testset,
+                             sampler=test_sampler,
+                             batch_size=args.batch_size,
+                             num_workers=4,
+                             pin_memory=True) if testset is not None else None
+
+    return train_loader, test_loader
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch DDP Demo")
@@ -331,13 +399,13 @@ if __name__ == "__main__":
 
     # Dataset
     if args.dataset == "cifar10":
-        train_dl, test_dl = load_cifar10_centralized_training_for_vit(args)
+        train_dl, test_dl = load_cifar_centralized_training_for_vit(args)
         class_num = 10
     elif args.dataset == "cifar100":
-        train_dl, test_dl = load_cifar100_centralized_training_for_vit(args)
+        train_dl, test_dl = load_cifar_centralized_training_for_vit(args)
         class_num = 100
     else:
-        train_dl, test_dl = load_cifar10_centralized_training_for_vit(args)
+        train_dl, test_dl = load_cifar_centralized_training_for_vit(args)
         class_num = 10
 
     # Model

@@ -11,5 +11,5 @@ python ./main_vit.py --lr 0.03 --dataset cifar10 --data_dir ./../../../data/cifa
 # 0.9654
 python ./main_vit.py --lr 0.001 --dataset cifar10 --data_dir ./../../../data/cifar10
 
-# 0.9657
+# 0.9661
 python ./main_vit.py --lr 0.003 --dataset cifar10 --data_dir ./../../../data/cifar10
