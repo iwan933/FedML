@@ -22,6 +22,7 @@ from fedml_api.data_preprocessing.cifar100.data_loader import load_cifar100_cent
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 # add the FedML root directory to the python path
+
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
 from fedml_api.model.cv.transformer.vit.vision_transformer import VisionTransformer, CONFIGS
@@ -247,15 +248,15 @@ if __name__ == "__main__":
     parser.add_argument("--decay_type", choices=["cosine", "linear"], default="cosine",
                         help="How to decay the learning rate.")
 
-    parser.add_argument("--warmup_steps", default=100, type=int,
-                        help="Step of training to perform learning rate warmup for.")
-
-    parser.add_argument('--lr', type=float, default=0.003, metavar='LR',
-                        help='learning rate (default: 0.001)')
+    parser.add_argument('--lr', type=float, default=0.03, metavar='LR',
+                        help='learning rate (default: 0.03)')
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.001)
 
-    parser.add_argument('--epochs', type=int, default=100, metavar='EP',
+    parser.add_argument("--warmup_steps", default=1, type=int,
+                        help="Step of training to perform learning rate warmup for.")
+
+    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
                         help='how many epochs will be trained locally')
 
     parser.add_argument("--img_size", default=224, type=int,
