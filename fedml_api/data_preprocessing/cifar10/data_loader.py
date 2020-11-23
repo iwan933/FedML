@@ -12,6 +12,10 @@ from torchvision.datasets.samplers import DistributedSampler
 from fedml_api.data_preprocessing.cifar10.datasets import CIFAR10_truncated
 
 # generate the non-IID distribution for all methods
+from fedml_core.non_iid_partition.noniid_partition import record_data_stats, \
+    non_iid_partition_with_dirichlet_distribution
+
+
 def read_data_distribution(filename='./data_preprocessing/non-iid-distribution/CIFAR10/distribution.txt'):
     distribution = {}
     with open(filename, 'r') as data:
@@ -268,12 +272,14 @@ def load_cifar10_centralized_training_for_vit(args):
     if args.is_distributed == 1:
         torch.distributed.barrier()
 
-    CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
-    CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    # CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    # CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    CIFAR_MEAN = [0.5, 0.5, 0.5]
+    CIFAR_STD = [0.5, 0.5, 0.5]
 
     transform_train = transforms.Compose([
-        transforms.Resize(args.img_size),
-        transforms.RandomCrop(args.img_size),
+        # transforms.Resize(args.img_size),
+        transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
