@@ -272,6 +272,7 @@ def load_cifar_centralized_training_for_vit(args):
 
     """
     transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
+    transforms.RandomSizedCrop() is deprecated.
     """
     transform_train = transforms.Compose([
         # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
