@@ -66,19 +66,20 @@ if __name__ == "__main__":
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-    # 1. forward propagation
-    optimizer.zero_grad()
-    outputs = model(torch.randn(20, 10))
+    for i in range(1000):
+        # 1. forward propagation
+        optimizer.zero_grad()
+        outputs = model(torch.randn(20, 10))
 
-    # 2. compute loss
-    labels = torch.randn(20, 5).to(device)
-    loss = loss_fn(outputs, labels)
-    print("rank=%d, loss=%f" % (local_rank, loss))
+        # 2. compute loss
+        labels = torch.randn(20, 5).to(device)
+        loss = loss_fn(outputs, labels)
+        print("rank=%d, loss=%f" % (local_rank, loss))
 
-    # 3. backward propagation
-    loss.backward()
+        # 3. backward propagation
+        loss.backward()
 
-    # 4. update weight
-    optimizer.step()
+        # 4. update weight
+        optimizer.step()
 
     dist.destroy_process_group()

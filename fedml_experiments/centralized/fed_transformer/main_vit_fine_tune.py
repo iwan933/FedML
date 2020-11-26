@@ -163,7 +163,7 @@ def load_cifar_centralized_training_for_vit(args):
         torch.distributed.barrier()
 
     """
-    the std 0.5 normalization is proposed by BiT (Big Transfer), which can increase the accuracy around 3%
+        the std 0.5 normalization is proposed by BiT (Big Transfer), which can increase the accuracy around 3%
     """
     # CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
     # CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
@@ -171,7 +171,7 @@ def load_cifar_centralized_training_for_vit(args):
     CIFAR_STD = [0.5, 0.5, 0.5]
 
     """
-    transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
+        transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
     """
     transform_train = transforms.Compose([
         # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
