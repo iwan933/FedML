@@ -253,7 +253,7 @@ if __name__ == "__main__":
     parser.add_argument('--lr', type=float, default=0.03, metavar='LR',
                         help='learning rate (default: 0.03)')
 
-    parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.001)
+    parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0)
 
     parser.add_argument("--warmup_steps", default=2, type=int,
                         help="Step of training to perform learning rate warmup for.")
