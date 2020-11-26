@@ -64,7 +64,7 @@ def create_model(args, model_name, output_dim):
     return model
 
 
-def _infer(test_data):
+def _infer(test_data, device):
     model.eval()
     test_loss = test_acc = test_total = 0.
     criterion = nn.CrossEntropyLoss().to(device)
@@ -83,12 +83,12 @@ def _infer(test_data):
     return test_acc, test_total, test_loss
 
 
-def eval(epoch, train_dl, test_dl):
+def eval(epoch, train_dl, test_dl, device):
     # train data
     train_tot_correct, train_num_sample, train_loss = _infer(train_dl)
 
     # test data
-    test_tot_correct, test_num_sample, test_loss = _infer(test_dl)
+    test_tot_correct, test_num_sample, test_loss = _infer(test_dl, device)
 
     # test on training dataset
     train_acc = train_tot_correct / train_num_sample
@@ -109,7 +109,7 @@ def eval(epoch, train_dl, test_dl):
     logging.info(stats)
 
 
-def train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler):
+def train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler, device):
     # training
     model.train()
     batch_loss = []
@@ -154,8 +154,8 @@ def train_and_eval(model, train_dl, test_dl, args, device):
 
     epoch_loss = []
     for epoch in range(args.epochs):
-        train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler)
-        eval(epoch, train_dl, test_dl)
+        train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler, device)
+        eval(epoch, train_dl, test_dl, device)
 
 
 def load_cifar_centralized_training_for_vit(args):
@@ -319,10 +319,9 @@ if __name__ == "__main__":
         class_num = 10
 
     # Model
-    model = create_model(args, model_name=args.model, output_dim=class_num)
+    model = create_model(args, model_name=args.model, output_dim=class_num).to(device)
     if args.is_distributed == 1:
         model = get_ddp_model(model, local_rank)
-    model.to(device)
 
     train_and_eval(model, train_dl, test_dl, args, device)
 
