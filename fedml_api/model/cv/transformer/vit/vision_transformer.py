@@ -172,15 +172,24 @@ class Block(nn.Module):
         self.attn = Attention(config, vis)
 
     def forward(self, x):
+        # logging.info("x1.shape = " + str(x.shape))
         h = x
+        # logging.info("h1.shape = " + str(h.shape))
         x = self.attention_norm(x)
+        # logging.info("x2.shape = " + str(x.shape))
         x, weights = self.attn(x)
+        # logging.info("x3.shape = " + str(x.shape))
         x = x + h
+        # logging.info("x4.shape = " + str(x.shape))
 
         h = x
+        # logging.info("h5.shape = " + str(h.shape))
         x = self.ffn_norm(x)
+        # logging.info("x6.shape = " + str(x.shape))
         x = self.ffn(x)
+        # logging.info("x7.shape = " + str(x.shape))
         x = x + h
+        # logging.info("x8.shape = " + str(x.shape))
         return x, weights
 
     def load_from(self, weights, n_block):
@@ -235,9 +244,11 @@ class Encoder(nn.Module):
         attn_weights = []
         for layer_block in self.layer:
             hidden_states, weights = layer_block(hidden_states)
+            # logging.info("hidden_states.shape = " + str(hidden_states.shape))
             if self.vis:
                 attn_weights.append(weights)
         encoded = self.encoder_norm(hidden_states)
+        # logging.info("encoded.shape = " + str(encoded.shape))
         return encoded, attn_weights
 
 
@@ -253,6 +264,21 @@ class Transformer(nn.Module):
         return encoded, attn_weights
 
 
+class FLGlobalHead(nn.Module):
+    def __init__(self, config, vis, num_classes):
+        super(FLGlobalHead, self).__init__()
+        self.encode_layer = Block(config, vis)
+        self.encoder_norm = LayerNorm(config.hidden_size, eps=1e-6)
+        self.linear = Linear(config.hidden_size, num_classes)
+
+    def forward(self, hidden_states):
+        hidden_states, weights = self.encode_layer(hidden_states)
+        encoded = self.encoder_norm(hidden_states)
+        # logging.info("hidden_states.shape = " + str(hidden_states.shape))
+        logits = self.linear(encoded[:, 0])
+        return logits
+
+
 class VisionTransformer(nn.Module):
     def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False):
         super(VisionTransformer, self).__init__()
@@ -262,26 +288,30 @@ class VisionTransformer(nn.Module):
 
         self.transformer = Transformer(config, img_size, vis)
 
-        self.head = Linear(config.hidden_size, num_classes)
+        # self.head = Linear(config.hidden_size, num_classes)
+        self.head = FLGlobalHead(config, vis, num_classes)
 
     def forward(self, x, labels=None):
         x, attn_weights = self.transformer(x)
         # logging.info("transformer output x.size = " + str(x.shape))
 
-        logits = self.head(x[:, 0])
+        logits, weights = self.head(x)
 
         if labels is not None:
             loss_fct = CrossEntropyLoss()
             loss = loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
             return loss
         else:
-            return logits, attn_weights
+            return logits, weights
 
     def load_from(self, weights):
         with torch.no_grad():
             if self.zero_head:
-                nn.init.zeros_(self.head.weight)
-                nn.init.zeros_(self.head.bias)
+                logging.info("TODO: initialize the weights")
+                # nn.init.zeros_(self.head.encode_layer.weight)
+                # nn.init.zeros_(self.head.encode_layer.bias)
+                # nn.init.zeros_(self.head.linear.weight)
+                # nn.init.zeros_(self.head.linear.bias)
             else:
                 self.head.weight.copy_(np2th(weights["head/kernel"]).t())
                 self.head.bias.copy_(np2th(weights["head/bias"]).t())

@@ -94,7 +94,8 @@ def _extract_features(args, model, train_dl, test_dl):
                 time_start_test_per_batch = time.time()
                 x = x.to(device)
                 extracted_feature_x, _ = model.transformer(x)
-                train_data_extracted_features[batch_idx] = (extracted_feature_x[:, 0].cpu().detach(), target)
+                # train_data_extracted_features[batch_idx] = (extracted_feature_x[:, 0].cpu().detach(), target)
+                train_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
                 time_end_test_per_batch = time.time()
                 logging.info("train_local feature extraction - time per batch = " + str(
                     time_end_test_per_batch - time_start_test_per_batch))
@@ -108,7 +109,8 @@ def _extract_features(args, model, train_dl, test_dl):
                 time_start_test_per_batch = time.time()
                 x = x.to(device)
                 extracted_feature_x, _ = model.transformer(x)
-                test_data_extracted_features[batch_idx] = (extracted_feature_x[:, 0].cpu().detach(), target)
+                # test_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
+                test_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
                 time_end_test_per_batch = time.time()
                 logging.info("test_local feature extraction - time per batch = " + str(
                     time_end_test_per_batch - time_start_test_per_batch))
@@ -342,10 +344,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.001)
 
-    parser.add_argument("--warmup_steps", default=1, type=int,
+    parser.add_argument("--warmup_steps", default=3, type=int,
                         help="Step of training to perform learning rate warmup for.")
 
-    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=30, metavar='EP',
                         help='how many epochs will be trained locally')
 
     parser.add_argument("--img_size", default=224, type=int,
