@@ -5,7 +5,6 @@ import random
 import socket
 import sys
 import time
-from os import path
 
 import numpy as np
 import psutil
@@ -18,11 +17,9 @@ from torchvision import transforms, datasets
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
-
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
-    load_from_pickle_file, save_as_pickle_file
+from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule
 from fedml_api.model.cv.transformer.vit.vision_transformer_origin import VisionTransformer, CONFIGS
 
 
@@ -135,6 +132,7 @@ def train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler):
                                                                               sum(epoch_loss) / len(epoch_loss)))
         # logging.info("time cost per iteration: " + str(time.time() - time_start_train_per_batch))
 
+
 def train_and_eval(model, train_dl, test_dl, args, device):
     criterion = nn.CrossEntropyLoss().to(device)
     if args.client_optimizer == "sgd":
@@ -200,13 +198,13 @@ def load_cifar_centralized_training_for_vit(args):
                                    transform=transform_test) if args.is_distributed == 0 else None
     else:
         trainset = datasets.CIFAR100(root=args.data_dir,
-                                    train=True,
-                                    download=True,
-                                    transform=transform_train)
+                                     train=True,
+                                     download=True,
+                                     transform=transform_train)
         testset = datasets.CIFAR100(root=args.data_dir,
-                                   train=False,
-                                   download=True,
-                                   transform=transform_test) if args.is_distributed == 0 else None
+                                    train=False,
+                                    download=True,
+                                    transform=transform_test) if args.is_distributed == 0 else None
 
     if args.is_distributed == 1:
         torch.distributed.barrier()
