@@ -324,6 +324,7 @@ if __name__ == "__main__":
     model = create_model(args, model_name=args.model, output_dim=class_num)
     if args.is_distributed == 1:
         model = get_ddp_model(model, local_rank)
+    model.to(device)
 
     train_and_eval(model, train_dl, test_dl, args, device)
 
