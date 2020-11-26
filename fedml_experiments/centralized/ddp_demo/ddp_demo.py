@@ -66,7 +66,7 @@ if __name__ == "__main__":
     loss_fn = nn.MSELoss()
     optimizer = optim.SGD(model.parameters(), lr=0.001)
 
-    for i in range(1000):
+    for i in range(100000):
         # 1. forward propagation
         optimizer.zero_grad()
         outputs = model(torch.randn(20, 10))
