@@ -280,7 +280,7 @@ class FLGlobalHead(nn.Module):
 
 
 class VisionTransformer(nn.Module):
-    def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False):
+    def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False, task_specific_layer_type=0):
         super(VisionTransformer, self).__init__()
         self.num_classes = num_classes
         self.zero_head = zero_head
@@ -288,9 +288,13 @@ class VisionTransformer(nn.Module):
 
         self.transformer = Transformer(config, img_size, vis)
 
-        # self.head = Linear(config.hidden_size, num_classes)
-        self.head = FLGlobalHead(config, vis, num_classes)
-
+        if task_specific_layer_type == 0:
+            self.head = Linear(config.hidden_size, num_classes)
+        elif task_specific_layer_type == 1:
+            self.head = FLGlobalHead(config, vis, num_classes)
+        else:
+            self.head = Linear(config.hidden_size, num_classes)
+            
     def forward(self, x):
         x, attn_weights = self.transformer(x)
         logits = self.head(x)

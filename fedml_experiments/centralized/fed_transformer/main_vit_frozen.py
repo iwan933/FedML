@@ -60,7 +60,8 @@ def create_model(args, model_name, output_dim):
         config = CONFIGS[model_type]
         logging.info("Vision Transformer Configuration: " + str(config))
         num_classes = output_dim
-        model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes)
+        model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes,
+                                  task_specific_layer_type=args.task_specific_layer_type)
         # freeze the backbone
         for param in model.transformer.parameters():
             param.requires_grad = False
@@ -359,6 +360,9 @@ if __name__ == "__main__":
 
     parser.add_argument("--is_distributed", default=0, type=int,
                         help="Resolution size")
+
+    parser.add_argument("--task_specific_layer_type", default=0, type=int,
+                        help="0: linear 1; 1 layer encoder; 2 layer encoder")
     args = parser.parse_args()
     print(args)
 
