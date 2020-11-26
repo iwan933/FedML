@@ -294,7 +294,7 @@ class VisionTransformer(nn.Module):
             self.head = FLGlobalHead(config, vis, num_classes)
         else:
             self.head = Linear(config.hidden_size, num_classes)
-            
+
     def forward(self, x):
         x, attn_weights = self.transformer(x)
         logits = self.head(x)

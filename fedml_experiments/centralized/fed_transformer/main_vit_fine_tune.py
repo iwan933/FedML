@@ -98,15 +98,16 @@ def eval(epoch, train_dl, test_dl, device):
     test_acc = test_tot_correct / test_num_sample
     test_loss = test_loss / test_num_sample
 
-    wandb.log({"Train/Acc": train_acc, "round": epoch})
-    wandb.log({"Train/Loss": train_loss, "round": epoch})
-    stats = {'training_acc': train_acc, 'training_loss': train_loss}
-    logging.info(stats)
+    if args.global_rank == 0:
+        wandb.log({"Train/Acc": train_acc, "round": epoch})
+        wandb.log({"Train/Loss": train_loss, "round": epoch})
+        stats = {'training_acc': train_acc, 'training_loss': train_loss}
+        logging.info(stats)
 
-    wandb.log({"Test/Acc": test_acc, "round": epoch})
-    wandb.log({"Test/Loss": test_loss, "round": epoch})
-    stats = {'test_acc': test_acc, 'test_loss': test_loss}
-    logging.info(stats)
+        wandb.log({"Test/Acc": test_acc, "round": epoch})
+        wandb.log({"Test/Loss": test_loss, "round": epoch})
+        stats = {'test_acc': test_acc, 'test_loss': test_loss}
+        logging.info(stats)
 
 
 def train(epoch, epoch_loss, train_dl, criterion, optimizer, scheduler, device):
@@ -229,6 +230,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch DDP Demo")
     parser.add_argument("--local_rank", type=int, default=0)
 
+    parser.add_argument("--global_rank", type=int, default=0)
+    
     parser.add_argument('--model', type=str, default='transformer', metavar='N',
                         help='neural network used in training')
 
@@ -291,6 +294,7 @@ if __name__ == "__main__":
     # DDP
     if args.is_distributed == 1:
         local_rank, global_rank = init_ddp()
+        args.global_rank = global_rank
     else:
         local_rank = args.local_rank
         global_rank = 0
