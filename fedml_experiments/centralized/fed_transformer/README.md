@@ -12,7 +12,7 @@ DDP Training
 ```
 # sh run_centralized_ddp_train.sh 4 1 0 127.0.0.1 11111
 
-nohup sh run_centralized_ddp_train.sh 4 1 0 127.0.0.1 11111 > ./machine1.txt 2>&1 &
+nohup sh run_centralized_ddp_train.sh 8 1 0 127.0.0.1 11111 > ./machine1.txt 2>&1 &
 ```
 
 ```
