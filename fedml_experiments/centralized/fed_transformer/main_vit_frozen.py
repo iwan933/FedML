@@ -205,7 +205,7 @@ def train_and_eval(model, train_dl, test_dl, args, device):
     criterion = nn.CrossEntropyLoss().to(device)
     if args.client_optimizer == "sgd":
         optimizer = torch.optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
-                                    lr=args.learning_rate,
+                                    lr=args.lr,
                                     momentum=0.9,
                                     weight_decay=args.wd)
     else:
