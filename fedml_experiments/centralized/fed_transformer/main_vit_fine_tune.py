@@ -85,7 +85,7 @@ def _infer(test_data, device):
 
 def eval(epoch, train_dl, test_dl, device):
     # train data
-    train_tot_correct, train_num_sample, train_loss = _infer(train_dl)
+    train_tot_correct, train_num_sample, train_loss = _infer(train_dl, device)
 
     # test data
     test_tot_correct, test_num_sample, test_loss = _infer(test_dl, device)
@@ -241,7 +241,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 64)')
 
-    parser.add_argument('--client_optimizer', type=str, default='adam',
+    parser.add_argument('--client_optimizer', type=str, default='sgd',
                         help='SGD with momentum; adam')
 
     parser.add_argument("--decay_type", choices=["cosine", "linear"], default="cosine",

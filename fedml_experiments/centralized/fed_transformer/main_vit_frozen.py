@@ -333,8 +333,8 @@ if __name__ == "__main__":
     parser.add_argument('--batch_size', type=int, default=64, metavar='N',
                         help='input batch size for training (default: 64)')
 
-    parser.add_argument('--client_optimizer', type=str, default='adam',
-                        help='SGD with momentum; adam')
+    parser.add_argument('--client_optimizer', type=str, default='sgd',
+                        help='SGD with momentum (Fine-tuning); adam (Training)')
 
     parser.add_argument("--decay_type", choices=["cosine", "linear"], default="cosine",
                         help="How to decay the learning rate.")
