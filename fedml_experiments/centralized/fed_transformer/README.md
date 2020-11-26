@@ -18,5 +18,5 @@ nohup sh run_centralized_ddp_train.sh 4 1 0 192.168.11.2 22222 cifar10 ./../../.
 
 ```
 # kill all processes
-kill $(ps aux | grep "ddp_demo.py" | grep -v grep | awk '{print $2}')
+kill $(ps aux | grep "main_vit_fine_tune.py" | grep -v grep | awk '{print $2}')
 ```
