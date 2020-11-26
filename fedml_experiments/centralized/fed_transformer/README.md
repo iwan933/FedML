@@ -14,6 +14,10 @@ DDP Training
 
 nohup sh run_centralized_ddp_train.sh 8 1 0 192.168.11.1 11111 cifar10 ./../../../data/cifar10 0.001 > ./machine1.txt 2>&1 &
 nohup sh run_centralized_ddp_train.sh 4 1 0 192.168.11.2 22222 cifar10 ./../../../data/cifar10 0.003 > ./machine1.txt 2>&1 &
+nohup sh run_centralized_ddp_train.sh 8 1 0 192.168.11.1 11111 cifar10 ./../../../data/cifar10 0.03 > ./machine1.txt 2>&1 &
+nohup sh run_centralized_ddp_train.sh 8 1 0 192.168.11.1 11111 cifar10 ./../../../data/cifar10 0.01 > ./machine1.txt 2>&1 &
+
+nohup sh run_centralized_ddp_train.sh 4 1 0 192.168.11.2 22222 cifar100 ./../../../data/cifar100 0.03 > ./machine1.txt 2>&1 &
 ```
 
 ```
