@@ -23,7 +23,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
-from fedml_api.model.cv.transformer.vit.vision_transformer import VisionTransformer, CONFIGS
+from fedml_api.model.cv.transformer.vit.vision_transformer_task_specific_layer import VisionTransformer, CONFIGS
 
 
 def init_ddp():

@@ -291,18 +291,10 @@ class VisionTransformer(nn.Module):
         # self.head = Linear(config.hidden_size, num_classes)
         self.head = FLGlobalHead(config, vis, num_classes)
 
-    def forward(self, x, labels=None):
+    def forward(self, x):
         x, attn_weights = self.transformer(x)
-        # logging.info("transformer output x.size = " + str(x.shape))
-
-        logits, weights = self.head(x)
-
-        if labels is not None:
-            loss_fct = CrossEntropyLoss()
-            loss = loss_fct(logits.view(-1, self.num_classes), labels.view(-1))
-            return loss
-        else:
-            return logits, weights
+        logits = self.head(x)
+        return logits
 
     def load_from(self, weights):
         with torch.no_grad():
