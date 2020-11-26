@@ -238,7 +238,7 @@ if __name__ == "__main__":
     parser.add_argument('--data_dir', type=str, default='./../../../data/cifar10',
                         help='data directory')
 
-    parser.add_argument('--batch_size', type=int, default=64, metavar='N',
+    parser.add_argument('--batch_size', type=int, default=32, metavar='N',
                         help='input batch size for training (default: 64)')
 
     parser.add_argument('--client_optimizer', type=str, default='adam',
