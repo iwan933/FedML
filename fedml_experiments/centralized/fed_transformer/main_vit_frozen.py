@@ -134,7 +134,11 @@ def _infer(data_extracted_features):
             x = x.to(device)
             labels = labels.to(device)
 
-            log_probs = model.head(x)
+            if args.task_specific_layer_type == 0:
+                log_probs = model.head(x[:, 0])
+            else:
+                log_probs = model.head(x)
+
             loss = criterion(log_probs, labels)
             _, predicted = torch.max(log_probs, -1)
             correct = predicted.eq(labels).sum()
@@ -148,7 +152,7 @@ def _infer(data_extracted_features):
     return test_acc, test_total, test_loss
 
 
-def eval(epoch, train_data_extracted_features, test_data_extracted_features):
+def eval(args, epoch, train_data_extracted_features, test_data_extracted_features):
     # train data
     train_tot_correct, train_num_sample, train_loss = _infer(train_data_extracted_features)
 
@@ -174,7 +178,7 @@ def eval(epoch, train_data_extracted_features, test_data_extracted_features):
     logging.info(stats)
 
 
-def train(epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features):
+def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features):
     # training
     model.train()
     batch_loss = []
@@ -185,7 +189,10 @@ def train(epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extract
         # x, label_a, label_b, lam = mixup_data(x, labels)
         # logging.info(images.shape)
         optimizer.zero_grad()
-        log_probs = model.head(x)
+        if args.task_specific_layer_type == 0:
+            log_probs = model.head(x[:, 0])
+        else:
+            log_probs = model.head(x)
         # print(log_probs.shape)
         # print(labels.shape)
         loss = criterion(log_probs, labels)
@@ -225,8 +232,8 @@ def train_and_eval(model, train_dl, test_dl, args, device):
 
     epoch_loss = []
     for epoch in range(args.epochs):
-        train(epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features)
-        eval(epoch, train_data_extracted_features, test_data_extracted_features)
+        train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features)
+        eval(args, epoch, train_data_extracted_features, test_data_extracted_features)
 
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):

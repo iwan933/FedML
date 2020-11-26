@@ -297,7 +297,12 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x):
         x, attn_weights = self.transformer(x)
-        logits = self.head(x)
+        if self.task_specific_layer_type == 0:
+            logits = self.head(x[:, 0])
+        elif self.task_specific_layer_type == 1:
+            logits = self.head(x)
+        else:
+            logits = self.head(x[:, 0])
         return logits
 
     def load_from(self, weights):
