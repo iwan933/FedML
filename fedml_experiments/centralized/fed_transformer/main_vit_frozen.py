@@ -18,7 +18,6 @@ from torchvision import transforms, datasets
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
 
-
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
@@ -72,51 +71,44 @@ def create_model(args, model_name, output_dim):
     return model
 
 
-def _extract_features(args, model, train_dl, test_dl):
+def _extract_features_impl(args, model, dataloader, is_train=True):
     model.eval()
 
     directory_train = "./extracted_features/" + args.dataset + "/"
-    path_train = directory_train + "train.pkl"
-    directory_test = "./extracted_features/" + args.dataset + "/"
-    path_test = directory_test + "test.pkl"
+    if is_train:
+        path_train = directory_train + "train.pkl"
+    else:
+        path_train = directory_train + "test.pkl"
 
     if not os.path.exists(directory_train):
         os.makedirs(directory_train)
-    if not os.path.exists(directory_test):
-        os.makedirs(directory_test)
+
+    chunks = 3
 
     train_data_extracted_features = dict()
-    test_data_extracted_features = dict()
     if path.exists(path_train):
-        train_data_extracted_features = load_from_pickle_file(path_train)
+        for chunk_index in range(chunks):
+            train_data_extracted_features = load_from_pickle_file(path_train)
     else:
         with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(train_dl):
+            for batch_idx, (x, target) in enumerate(dataloader):
                 time_start_test_per_batch = time.time()
                 x = x.to(device)
-                extracted_feature_x, _ = model.transformer(x)
-                # train_data_extracted_features[batch_idx] = (extracted_feature_x[:, 0].cpu().detach(), target)
+                extracted_feature_x, _, hidden_representations = model.transformer(x)
+                # for i, h in enumerate(hidden_representations):
+                #     hidden_representations[i] = h.cpu().detach()
                 train_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
                 time_end_test_per_batch = time.time()
                 logging.info("train_local feature extraction - time per batch = " + str(
                     time_end_test_per_batch - time_start_test_per_batch))
-        save_as_pickle_file(path_train, train_data_extracted_features)
 
-    if path.exists(path_test):
-        test_data_extracted_features = load_from_pickle_file(path_test)
-    else:
-        with torch.no_grad():
-            for batch_idx, (x, target) in enumerate(test_dl):
-                time_start_test_per_batch = time.time()
-                x = x.to(device)
-                extracted_feature_x, _ = model.transformer(x)
-                # test_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
-                test_data_extracted_features[batch_idx] = (extracted_feature_x.cpu().detach(), target)
-                time_end_test_per_batch = time.time()
-                logging.info("test_local feature extraction - time per batch = " + str(
-                    time_end_test_per_batch - time_start_test_per_batch))
-        save_as_pickle_file(path_test, test_data_extracted_features)
+    save_as_pickle_file(path_train, train_data_extracted_features)
+    return train_data_extracted_features
 
+
+def _extract_features(args, model, train_dl, test_dl):
+    train_data_extracted_features = _extract_features_impl(args, model, train_dl, True)
+    test_data_extracted_features = _extract_features_impl(args, model, test_dl, False)
     return train_data_extracted_features, test_data_extracted_features
 
 
@@ -152,6 +144,57 @@ def _infer(data_extracted_features):
     return test_acc, test_total, test_loss
 
 
+def _infer_from_raw_data(train_dl):
+    time_start_test_per_batch = time.time()
+    model.eval()
+
+    test_loss = test_acc = test_total = 0.
+    criterion = nn.CrossEntropyLoss().to(device)
+    with torch.no_grad():
+        for batch_idx, (x, labels) in enumerate(train_dl):
+            time_start_test_per_batch = time.time()
+            x = x.to(device)
+            labels = labels.to(device)
+            log_probs = model(x)
+            loss = criterion(log_probs, labels)
+            _, predicted = torch.max(log_probs, -1)
+            correct = predicted.eq(labels).sum()
+            test_acc += correct.item()
+            test_loss += loss.item() * labels.size(0)
+            test_total += labels.size(0)
+
+    time_end_test_per_batch = time.time()
+
+    # logging.info("time per _infer = " + str(time_end_test_per_batch - time_start_test_per_batch))
+    return test_acc, test_total, test_loss
+
+
+def eval_from_raw_data(args, epoch, train_dl, test_dl):
+    # train data
+    train_tot_correct, train_num_sample, train_loss = _infer_from_raw_data(train_dl)
+
+    # test data
+    test_tot_correct, test_num_sample, test_loss = _infer_from_raw_data(test_dl)
+
+    # test on training dataset
+    train_acc = train_tot_correct / train_num_sample
+    train_loss = train_loss / train_num_sample
+
+    # test on test dataset
+    test_acc = test_tot_correct / test_num_sample
+    test_loss = test_loss / test_num_sample
+
+    wandb.log({"Train/Acc": train_acc, "round": epoch})
+    wandb.log({"Train/Loss": train_loss, "round": epoch})
+    stats = {'training_acc': train_acc, 'training_loss': train_loss}
+    logging.info(stats)
+
+    wandb.log({"Test/Acc": test_acc, "round": epoch})
+    wandb.log({"Test/Loss": test_loss, "round": epoch})
+    stats = {'test_acc': test_acc, 'test_loss': test_loss}
+    logging.info(stats)
+
+
 def eval(args, epoch, train_data_extracted_features, test_data_extracted_features):
     # train data
     train_tot_correct, train_num_sample, train_loss = _infer(train_data_extracted_features)
@@ -183,7 +226,7 @@ def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_e
     model.train()
     batch_loss = []
     for batch_idx in train_data_extracted_features.keys():
-        (x, labels) = train_data_extracted_features[batch_idx]
+        (x, hidden_presentations, labels) = train_data_extracted_features[batch_idx]
         x = x.to(device)
         labels = labels.to(device)
         # x, label_a, label_b, lam = mixup_data(x, labels)
@@ -191,6 +234,8 @@ def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_e
         optimizer.zero_grad()
         if args.task_specific_layer_type == 0:
             log_probs = model.head(x[:, 0])
+        elif args.task_specific_layer_type == 3:
+            log_probs = model.head(x, hidden_presentations)
         else:
             log_probs = model.head(x)
         # print(log_probs.shape)
@@ -208,6 +253,27 @@ def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_e
         #     logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
         #                                                                       sum(epoch_loss) / len(epoch_loss)))
 
+
+def train_from_raw_data(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_dl):
+    # training
+    model.train()
+    batch_loss = []
+    for batch_idx, (x, labels) in enumerate(train_dl):
+        x = x.to(device)
+        labels = labels.to(device)
+        optimizer.zero_grad()
+        log_probs = model(x)
+        loss = criterion(log_probs, labels)
+        loss.backward()
+        # according to ViT paper, all fine-tuned tasks do gradient clipping at global norm 1.
+        torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+        optimizer.step()
+        scheduler.step()
+        batch_loss.append(loss.item())
+        # if len(batch_loss) > 0:
+        #     epoch_loss.append(sum(batch_loss) / len(batch_loss))
+        #     logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
+        #                                                                       sum(epoch_loss) / len(epoch_loss)))
 
 def train_and_eval(model, train_dl, test_dl, args, device):
     criterion = nn.CrossEntropyLoss().to(device)
@@ -228,12 +294,17 @@ def train_and_eval(model, train_dl, test_dl, args, device):
         scheduler = WarmupLinearSchedule(optimizer, warmup_steps=args.warmup_steps,
                                          t_total=args.epochs)
 
-    train_data_extracted_features, test_data_extracted_features = _extract_features(args, model, train_dl, test_dl)
+    # train_data_extracted_features, test_data_extracted_features = _extract_features(args, model, train_dl, test_dl)
+    #
+    # epoch_loss = []
+    # for epoch in range(args.epochs):
+    #     train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features)
+    #     eval(args, epoch, train_data_extracted_features, test_data_extracted_features)
 
     epoch_loss = []
     for epoch in range(args.epochs):
-        train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features)
-        eval(args, epoch, train_data_extracted_features, test_data_extracted_features)
+        train_from_raw_data(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_dl)
+        eval_from_raw_data(args, epoch, train_dl, test_dl)
 
 
 def mixup_data(x, y, alpha=1.0, use_cuda=True):
@@ -273,16 +344,26 @@ def load_cifar_centralized_training_for_vit(args):
     """
     transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
     transforms.RandomSizedCrop() is deprecated.
+    The following two transforms are equal.
     """
+    # transform_train = transforms.Compose([
+    #     # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+    #     transforms.RandomResizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+    #     # transforms.Resize(args.img_size),
+    #     # transforms.RandomCrop(args.img_size),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    # ])
     transform_train = transforms.Compose([
         # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
-        transforms.RandomResizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
-        # transforms.Resize(args.img_size),
-        # transforms.RandomCrop(args.img_size),
+        transforms.Resize(args.img_size),
+        transforms.RandomCrop(args.img_size),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
     ])
+
     transform_test = transforms.Compose([
         transforms.Resize((args.img_size, args.img_size)),
         transforms.ToTensor(),
@@ -300,13 +381,13 @@ def load_cifar_centralized_training_for_vit(args):
                                    transform=transform_test) if args.is_distributed == 0 else None
     else:
         trainset = datasets.CIFAR100(root=args.data_dir,
-                                    train=True,
-                                    download=True,
-                                    transform=transform_train)
+                                     train=True,
+                                     download=True,
+                                     transform=transform_train)
         testset = datasets.CIFAR100(root=args.data_dir,
-                                   train=False,
-                                   download=True,
-                                   transform=transform_test) if args.is_distributed == 0 else None
+                                    train=False,
+                                    download=True,
+                                    transform=transform_test) if args.is_distributed == 0 else None
 
     if args.is_distributed == 1:
         torch.distributed.barrier()

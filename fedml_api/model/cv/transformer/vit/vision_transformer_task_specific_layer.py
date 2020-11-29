@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNorm
+from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNorm, Parameter
 from torch.nn.modules.utils import _pair
 from scipy import ndimage
 
@@ -242,14 +242,16 @@ class Encoder(nn.Module):
 
     def forward(self, hidden_states):
         attn_weights = []
+        hidden_representations = []
         for layer_block in self.layer:
             hidden_states, weights = layer_block(hidden_states)
+            hidden_representations.append(hidden_states)
             # logging.info("hidden_states.shape = " + str(hidden_states.shape))
             if self.vis:
                 attn_weights.append(weights)
         encoded = self.encoder_norm(hidden_states)
         # logging.info("encoded.shape = " + str(encoded.shape))
-        return encoded, attn_weights
+        return encoded, attn_weights, hidden_representations
 
 
 class Transformer(nn.Module):
@@ -260,8 +262,8 @@ class Transformer(nn.Module):
 
     def forward(self, input_ids):
         embedding_output = self.embeddings(input_ids)
-        encoded, attn_weights = self.encoder(embedding_output)
-        return encoded, attn_weights
+        encoded, attn_weights, hidden_representations = self.encoder(embedding_output)
+        return encoded, attn_weights, hidden_representations
 
 
 class FLGlobalHead(nn.Module):
@@ -279,6 +281,35 @@ class FLGlobalHead(nn.Module):
         return logits
 
 
+class MixHiddenPresentations(nn.Module):
+    def __init__(self, config, num_classes):
+        super(MixHiddenPresentations, self).__init__()
+        layer_num = config.transformer["num_layers"] + 1
+        initial_scalar_parameters = [1.0] * layer_num
+        self.scalar_parameters = nn.ParameterList(
+            [
+                Parameter(
+                    torch.FloatTensor([initial_scalar_parameters[i]]), requires_grad=True
+                )
+                for i in range(layer_num)
+            ]
+        )
+        self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
+        self.linear = Linear(config.hidden_size, num_classes)
+
+    def forward(self, final_layer_presentation, hidden_representations):
+        hidden_representations.append(final_layer_presentation)
+        normed_weights = torch.nn.functional.softmax(
+            torch.cat([parameter for parameter in self.scalar_parameters]), dim=0
+        )
+        mixed_representations = []
+        for weight, tensor in zip(normed_weights, hidden_representations):
+            mixed_representations.append(weight * tensor)
+        mixed_output = self.gamma * sum(mixed_representations)
+        logits = self.linear(mixed_output[:, 0])
+        return logits
+
+
 class VisionTransformer(nn.Module):
     def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False, task_specific_layer_type=0):
         super(VisionTransformer, self).__init__()
@@ -287,23 +318,31 @@ class VisionTransformer(nn.Module):
         self.classifier = config.classifier
 
         self.transformer = Transformer(config, img_size, vis)
-
+        self.task_specific_layer_type = task_specific_layer_type
         if task_specific_layer_type == 0:
             self.head = Linear(config.hidden_size, num_classes)
         elif task_specific_layer_type == 1:
             self.head = FLGlobalHead(config, vis, num_classes)
+        elif task_specific_layer_type == 3:
+            self.head = MixHiddenPresentations(config, num_classes)
         else:
             self.head = Linear(config.hidden_size, num_classes)
 
     def forward(self, x):
-        x, attn_weights = self.transformer(x)
+        hidden_state, attn_weights, hidden_representations = self.transformer(x)
         if self.task_specific_layer_type == 0:
-            logits = self.head(x[:, 0])
+            logits = self.head(hidden_state[:, 0])
+            return logits
         elif self.task_specific_layer_type == 1:
-            logits = self.head(x)
+            logits = self.head(hidden_state)
+            return logits
+        elif self.task_specific_layer_type == 3:
+            # logging.info("hidden_state.shape = " + str(hidden_state.shape))
+            logits = self.head(hidden_state, hidden_representations)
+            return logits
         else:
-            logits = self.head(x[:, 0])
-        return logits
+            logits = self.head(hidden_state[:, 0])
+            return logits
 
     def load_from(self, weights):
         with torch.no_grad():
