@@ -6,18 +6,15 @@ from __future__ import print_function
 import copy
 import logging
 import math
-
 from os.path import join as pjoin
 
 import ml_collections
+import numpy as np
 import torch
 import torch.nn as nn
-import numpy as np
-
-from torch.nn import CrossEntropyLoss, Dropout, Softmax, Linear, Conv2d, LayerNorm, Parameter
-from torch.nn.modules.utils import _pair
 from scipy import ndimage
-
+from torch.nn import Dropout, Softmax, Linear, Conv2d, LayerNorm, Parameter
+from torch.nn.modules.utils import _pair
 
 logger = logging.getLogger(__name__)
 
@@ -267,16 +264,19 @@ class Transformer(nn.Module):
 
 
 class FLGlobalHead(nn.Module):
-    def __init__(self, config, vis, num_classes):
+    def __init__(self, config, vis, num_classes, layer_number):
         super(FLGlobalHead, self).__init__()
-        self.encode_layer = Block(config, vis)
+        self.layer = nn.ModuleList()
         self.encoder_norm = LayerNorm(config.hidden_size, eps=1e-6)
+        for _ in range(layer_number):
+            layer = Block(config, vis)
+            self.layer.append(copy.deepcopy(layer))
         self.linear = Linear(config.hidden_size, num_classes)
 
     def forward(self, hidden_states):
-        hidden_states, weights = self.encode_layer(hidden_states)
+        for layer_block in self.layer:
+            hidden_states, weights = layer_block(hidden_states)
         encoded = self.encoder_norm(hidden_states)
-        # logging.info("hidden_states.shape = " + str(hidden_states.shape))
         logits = self.linear(encoded[:, 0])
         return logits
 
@@ -319,11 +319,18 @@ class VisionTransformer(nn.Module):
 
         self.transformer = Transformer(config, img_size, vis)
         self.task_specific_layer_type = task_specific_layer_type
+        logging.info("VisionTransformer. task_specific_layer_type = " + str(task_specific_layer_type))
         if task_specific_layer_type == 0:
             self.head = Linear(config.hidden_size, num_classes)
         elif task_specific_layer_type == 1:
-            self.head = FLGlobalHead(config, vis, num_classes)
+            self.head = FLGlobalHead(config, vis, num_classes, 1)
+        elif task_specific_layer_type == 2:
+            self.head = FLGlobalHead(config, vis, num_classes, 2)
         elif task_specific_layer_type == 3:
+            self.head = FLGlobalHead(config, vis, num_classes, 3)
+        elif task_specific_layer_type == 4:
+            self.head = FLGlobalHead(config, vis, num_classes, 4)
+        elif task_specific_layer_type == -1:
             self.head = MixHiddenPresentations(config, num_classes)
         else:
             self.head = Linear(config.hidden_size, num_classes)
@@ -336,7 +343,16 @@ class VisionTransformer(nn.Module):
         elif self.task_specific_layer_type == 1:
             logits = self.head(hidden_state)
             return logits
+        elif self.task_specific_layer_type == 2:
+            logits = self.head(hidden_state)
+            return logits
         elif self.task_specific_layer_type == 3:
+            logits = self.head(hidden_state)
+            return logits
+        elif self.task_specific_layer_type == 4:
+            logits = self.head(hidden_state)
+            return logits
+        elif self.task_specific_layer_type == -1:
             # logging.info("hidden_state.shape = " + str(hidden_state.shape))
             logits = self.head(hidden_state, hidden_representations)
             return logits

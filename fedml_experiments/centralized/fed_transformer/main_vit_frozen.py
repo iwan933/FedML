@@ -22,6 +22,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from fedml_api.distributed.fed_transformer.utils import count_parameters, WarmupCosineSchedule, WarmupLinearSchedule, \
     load_from_pickle_file, save_as_pickle_file
+
 from fedml_api.model.cv.transformer.vit.vision_transformer_task_specific_layer import VisionTransformer, CONFIGS
 
 
@@ -62,8 +63,25 @@ def create_model(args, model_name, output_dim):
         model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes,
                                   task_specific_layer_type=args.task_specific_layer_type)
         # freeze the backbone
-        for param in model.transformer.parameters():
+        if args.task_specific_layer_type == 11:
+            fine_tuning_layer_num = 1
+        elif args.task_specific_layer_type == 12:
+            fine_tuning_layer_num = 2
+        elif args.task_specific_layer_type == 13:
+            fine_tuning_layer_num = 3
+        elif args.task_specific_layer_type == 14:
+            fine_tuning_layer_num = 4
+        else:
+            fine_tuning_layer_num = 0
+
+        frozen_layer_num = config.transformer["num_layers"]-fine_tuning_layer_num
+        for param in model.transformer.embeddings.parameters():
             param.requires_grad = False
+        for layer_index in range(len(model.transformer.encoder.layer)):
+            if layer_index == frozen_layer_num:
+                break
+            for param in model.transformer.encoder.layer[layer_index].parameters():
+                param.requires_grad = False
 
         model.load_from(np.load(args.pretrained_dir))
         num_params = count_parameters(model)
