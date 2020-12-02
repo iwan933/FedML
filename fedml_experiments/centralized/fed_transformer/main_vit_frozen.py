@@ -61,28 +61,8 @@ def create_model(args, model_name, output_dim):
         logging.info("Vision Transformer Configuration: " + str(config))
         num_classes = output_dim
         model = VisionTransformer(config, args.img_size, zero_head=True, num_classes=num_classes,
-                                  task_specific_layer_type=args.task_specific_layer_type)
-        # freeze the backbone
-        if args.task_specific_layer_type == 11:
-            fine_tuning_layer_num = 1
-        elif args.task_specific_layer_type == 12:
-            fine_tuning_layer_num = 2
-        elif args.task_specific_layer_type == 13:
-            fine_tuning_layer_num = 3
-        elif args.task_specific_layer_type == 14:
-            fine_tuning_layer_num = 4
-        else:
-            fine_tuning_layer_num = 0
-
-        frozen_layer_num = config.transformer["num_layers"]-fine_tuning_layer_num
-        for param in model.transformer.embeddings.parameters():
-            param.requires_grad = False
-        for layer_index in range(len(model.transformer.encoder.layer)):
-            if layer_index == frozen_layer_num:
-                break
-            for param in model.transformer.encoder.layer[layer_index].parameters():
-                param.requires_grad = False
-
+                                  fine_tune_layer_num=args.fine_tune_layer_num,
+                                  task_specific_layer_num=args.task_specific_layer_num)
         model.load_from(np.load(args.pretrained_dir))
         num_params = count_parameters(model)
         logging.info("Vision Transformer Model Size = " + str(num_params))
@@ -469,8 +449,12 @@ if __name__ == "__main__":
     parser.add_argument("--is_distributed", default=0, type=int,
                         help="Resolution size")
 
-    parser.add_argument("--task_specific_layer_type", default=0, type=int,
-                        help="0: linear 1; 1 layer encoder; 2 layer encoder")
+    parser.add_argument("--fine_tune_layer_num", default=0, type=int,
+                        help="fine_tune_layer_num")
+
+    parser.add_argument("--task_specific_layer_num", default=0, type=int,
+                        help="task_specific_layer_num")
+
     args = parser.parse_args()
     print(args)
 

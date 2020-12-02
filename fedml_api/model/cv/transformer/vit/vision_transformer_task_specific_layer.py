@@ -310,55 +310,80 @@ class MixHiddenPresentations(nn.Module):
         return logits
 
 
+class MixHiddenRepWithTaskSpecificLayers(nn.Module):
+    def __init__(self, config, vis, num_classes, layer_number):
+        super(MixHiddenRepWithTaskSpecificLayers, self).__init__()
+        layer_num = config.transformer["num_layers"] + 1
+        initial_scalar_parameters = [1.0] * layer_num
+        self.scalar_parameters = nn.ParameterList(
+            [
+                Parameter(
+                    torch.FloatTensor([initial_scalar_parameters[i]]), requires_grad=True
+                )
+                for i in range(layer_num)
+            ]
+        )
+        self.gamma = Parameter(torch.FloatTensor([1.0]), requires_grad=True)
+        self.layer = nn.ModuleList()
+        self.encoder_norm = LayerNorm(config.hidden_size, eps=1e-6)
+        for _ in range(layer_number):
+            layer = Block(config, vis)
+            self.layer.append(copy.deepcopy(layer))
+        self.linear = Linear(config.hidden_size, num_classes)
+
+    def forward(self, final_layer_presentation, hidden_representations):
+        hidden_representations.append(final_layer_presentation)
+        normed_weights = torch.nn.functional.softmax(
+            torch.cat([parameter for parameter in self.scalar_parameters]), dim=0
+        )
+        mixed_representations = []
+        for weight, tensor in zip(normed_weights, hidden_representations):
+            mixed_representations.append(weight * tensor)
+        mixed_output = self.gamma * sum(mixed_representations)
+        for layer_block in self.layer:
+            mixed_output, weights = layer_block(mixed_output)
+        encoded = self.encoder_norm(mixed_output)
+        logits = self.linear(encoded[:, 0])
+        return logits
+
+
 class VisionTransformer(nn.Module):
-    def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False, task_specific_layer_type=0):
+    def __init__(self, config, img_size=224, num_classes=21843, zero_head=False, vis=False,
+                 fine_tune_layer_num=0, task_specific_layer_num=0):
         super(VisionTransformer, self).__init__()
+
+        logging.info("VisionTransformer. fine_tune_layer_num = " + str(fine_tune_layer_num))
+        logging.info("VisionTransformer. task_specific_layer_num = " + str(task_specific_layer_num))
+        self.fine_tune_layer_num = fine_tune_layer_num
+        self.task_specific_layer_num = task_specific_layer_num
+
         self.num_classes = num_classes
         self.zero_head = zero_head
         self.classifier = config.classifier
 
         self.transformer = Transformer(config, img_size, vis)
-        self.task_specific_layer_type = task_specific_layer_type
-        logging.info("VisionTransformer. task_specific_layer_type = " + str(task_specific_layer_type))
-        if task_specific_layer_type == 0:
+        if fine_tune_layer_num == 0 and task_specific_layer_num == 0:
             self.head = Linear(config.hidden_size, num_classes)
-        elif task_specific_layer_type == 1:
-            self.head = FLGlobalHead(config, vis, num_classes, 1)
-        elif task_specific_layer_type == 2:
-            self.head = FLGlobalHead(config, vis, num_classes, 2)
-        elif task_specific_layer_type == 3:
-            self.head = FLGlobalHead(config, vis, num_classes, 3)
-        elif task_specific_layer_type == 4:
-            self.head = FLGlobalHead(config, vis, num_classes, 4)
-        elif task_specific_layer_type == -1:
-            self.head = MixHiddenPresentations(config, num_classes)
         else:
-            self.head = Linear(config.hidden_size, num_classes)
+            self.head = MixHiddenRepWithTaskSpecificLayers(config, vis, num_classes, task_specific_layer_num)
+
+        # freeze
+        frozen_layer_num = config.transformer["num_layers"] - fine_tune_layer_num
+        for param in self.transformer.embeddings.parameters():
+            param.requires_grad = False
+        for layer_index in range(len(self.transformer.encoder.layer)):
+            if layer_index == frozen_layer_num:
+                break
+            for param in self.transformer.encoder.layer[layer_index].parameters():
+                param.requires_grad = False
 
     def forward(self, x):
         hidden_state, attn_weights, hidden_representations = self.transformer(x)
-        if self.task_specific_layer_type == 0:
-            logits = self.head(hidden_state[:, 0])
-            return logits
-        elif self.task_specific_layer_type == 1:
+        if self.fine_tune_layer_num == 0 and self.task_specific_layer_num == 0:
             logits = self.head(hidden_state)
-            return logits
-        elif self.task_specific_layer_type == 2:
-            logits = self.head(hidden_state)
-            return logits
-        elif self.task_specific_layer_type == 3:
-            logits = self.head(hidden_state)
-            return logits
-        elif self.task_specific_layer_type == 4:
-            logits = self.head(hidden_state)
-            return logits
-        elif self.task_specific_layer_type == -1:
-            # logging.info("hidden_state.shape = " + str(hidden_state.shape))
-            logits = self.head(hidden_state, hidden_representations)
-            return logits
         else:
-            logits = self.head(hidden_state[:, 0])
-            return logits
+            logits = self.head(hidden_state, hidden_representations)
+        return logits
 
     def load_from(self, weights):
         with torch.no_grad():
