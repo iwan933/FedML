@@ -9,7 +9,7 @@ from torch.utils.data import RandomSampler, SequentialSampler, DataLoader
 from torchvision import datasets
 from torchvision.datasets.samplers import DistributedSampler
 
-from fedml_api.data_preprocessing.cifar10.datasets import CIFAR10_truncated
+from .datasets import CIFAR10_truncated
 
 # generate the non-IID distribution for all methods
 from fedml_core.non_iid_partition.noniid_partition import record_data_stats, \
