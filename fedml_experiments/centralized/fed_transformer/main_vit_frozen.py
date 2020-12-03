@@ -184,15 +184,16 @@ def eval_from_raw_data(args, epoch, train_dl, test_dl):
     test_acc = test_tot_correct / test_num_sample
     test_loss = test_loss / test_num_sample
 
-    wandb.log({"Train/Acc": train_acc, "round": epoch})
-    wandb.log({"Train/Loss": train_loss, "round": epoch})
-    stats = {'training_acc': train_acc, 'training_loss': train_loss}
-    logging.info(stats)
+    if args.global_rank == 0:
+        wandb.log({"Train/Acc": train_acc, "round": epoch})
+        wandb.log({"Train/Loss": train_loss, "round": epoch})
+        stats = {'training_acc': train_acc, 'training_loss': train_loss}
+        logging.info(stats)
 
-    wandb.log({"Test/Acc": test_acc, "round": epoch})
-    wandb.log({"Test/Loss": test_loss, "round": epoch})
-    stats = {'test_acc': test_acc, 'test_loss': test_loss}
-    logging.info(stats)
+        wandb.log({"Test/Acc": test_acc, "round": epoch})
+        wandb.log({"Test/Loss": test_loss, "round": epoch})
+        stats = {'test_acc': test_acc, 'test_loss': test_loss}
+        logging.info(stats)
 
 
 def eval(args, epoch, train_data_extracted_features, test_data_extracted_features):
