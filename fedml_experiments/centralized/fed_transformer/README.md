@@ -19,9 +19,9 @@ DDP Training
 ```
 # sh run_centralized_ddp_train.sh 4 1 0 127.0.0.1 11111 
 
-# sh run_centralized_ddp_frozen_training.sh 4 1 0 127.0.0.1 11111 ib0 imagenet /home/chaoyanghe/sourcecode/dataset/cv/ImageNet 0.03 0 0
+# sh run_centralized_ddp_frozen_training.sh 4 1 0 127.0.0.1 11111 imagenet /home/chaoyanghe/sourcecode/dataset/cv/ImageNet ib0 0.03 0 0
 
-# sh run_centralized_ddp_frozen_training.sh 4 1 0 127.0.0.1 11111 lo imagenet /home/chaoyanghe/sourcecode/dataset/cv/ImageNet 0.03 0 0
+# sh run_centralized_ddp_frozen_training.sh 4 1 0 127.0.0.1 11111 imagenet /home/chaoyanghe/sourcecode/dataset/cv/ImageNet lo 0.03 0 0
 
 nohup sh run_centralized_ddp_train.sh 8 1 0 192.168.11.1 11111 cifar10 ./../../../data/cifar10 0.001 > ./machine1.txt 2>&1 &
 nohup sh run_centralized_ddp_train.sh 4 1 0 192.168.11.2 22222 cifar10 ./../../../data/cifar10 0.003 > ./machine1.txt 2>&1 &
