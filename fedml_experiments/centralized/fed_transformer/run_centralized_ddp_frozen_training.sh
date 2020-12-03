@@ -7,9 +7,11 @@ MASTER_ADDR=$4
 MASTER_PORT=$5
 DATASET=$6
 DATA_DIR=$7
-LR=$8
-fine_tune_layer_num=$9
-task_specific_layer_num=${10}
+if_name=8
+LR=$9
+fine_tune_layer_num=${10}
+task_specific_layer_num=${11}
+
 
 python -m torch.distributed.launch \
 --nproc_per_node=$NPROC_PER_NODE --nnodes=$NNODE --node_rank=$NODE_RANK \
@@ -17,6 +19,7 @@ python -m torch.distributed.launch \
 --master_port $MASTER_PORT \
 main_vit_frozen.py \
 --is_distributed 1 \
+--if_name $if_name \
 --lr $LR \
 --dataset $DATASET \
 --data_dir $DATA_DIR \

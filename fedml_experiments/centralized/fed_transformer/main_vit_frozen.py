@@ -31,9 +31,6 @@ def init_ddp(args):
     # use InfiniBand
     os.environ['NCCL_DEBUG'] = 'INFO'
 
-    # lab server
-    # os.environ['NCCL_SOCKET_IFNAME'] = 'ib0'
-    # chaoyang's personal server
     os.environ['NCCL_SOCKET_IFNAME'] = args.if_name
 
     # This the global rank: 0, 1, 2, ..., 15
