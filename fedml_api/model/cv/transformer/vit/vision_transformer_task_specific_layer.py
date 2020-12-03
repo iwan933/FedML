@@ -380,7 +380,7 @@ class VisionTransformer(nn.Module):
     def forward(self, x):
         hidden_state, attn_weights, hidden_representations = self.transformer(x)
         if self.fine_tune_layer_num == 0 and self.task_specific_layer_num == 0:
-            logits = self.head(hidden_state)
+            logits = self.head(hidden_state[:, 0])
         else:
             logits = self.head(hidden_state, hidden_representations)
         return logits

@@ -183,6 +183,8 @@ def load_partition_data_ImageNet(dataset, data_dir,
            data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
 
 
+
+
 if __name__ == '__main__':
     data_dir = '/home/datasets/imagenet/ILSVRC2012_dataset'
 

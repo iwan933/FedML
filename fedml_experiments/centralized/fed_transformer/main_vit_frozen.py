@@ -17,6 +17,7 @@ from torch.utils.data import RandomSampler, SequentialSampler, DataLoader, Distr
 from torchvision import transforms, datasets
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.getcwd(), "../../../")))
+from fedml_api.data_preprocessing.ImageNet.datasets import ImageNet
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -29,7 +30,11 @@ from fedml_api.model.cv.transformer.vit.vision_transformer_task_specific_layer i
 def init_ddp():
     # use InfiniBand
     os.environ['NCCL_DEBUG'] = 'INFO'
-    os.environ['NCCL_SOCKET_IFNAME'] = 'ib0'
+
+    # lab server
+    # os.environ['NCCL_SOCKET_IFNAME'] = 'ib0'
+    # chaoyang's personal server
+    os.environ['NCCL_SOCKET_IFNAME'] = 'lo'
 
     # This the global rank: 0, 1, 2, ..., 15
     global_rank = int(os.environ['RANK'])
@@ -124,7 +129,7 @@ def _infer(data_extracted_features):
             x = x.to(device)
             labels = labels.to(device)
 
-            if args.task_specific_layer_type == 0:
+            if args.task_specific_layer_num == 0:
                 log_probs = model.head(x[:, 0])
             else:
                 log_probs = model.head(x)
@@ -208,15 +213,16 @@ def eval(args, epoch, train_data_extracted_features, test_data_extracted_feature
     test_acc = test_tot_correct / test_num_sample
     test_loss = test_loss / test_num_sample
 
-    wandb.log({"Train/Acc": train_acc, "round": epoch})
-    wandb.log({"Train/Loss": train_loss, "round": epoch})
-    stats = {'training_acc': train_acc, 'training_loss': train_loss}
-    logging.info(stats)
+    if args.global_rank == 0:
+        wandb.log({"Train/Acc": train_acc, "round": epoch})
+        wandb.log({"Train/Loss": train_loss, "round": epoch})
+        stats = {'training_acc': train_acc, 'training_loss': train_loss}
+        logging.info(stats)
 
-    wandb.log({"Test/Acc": test_acc, "round": epoch})
-    wandb.log({"Test/Loss": test_loss, "round": epoch})
-    stats = {'test_acc': test_acc, 'test_loss': test_loss}
-    logging.info(stats)
+        wandb.log({"Test/Acc": test_acc, "round": epoch})
+        wandb.log({"Test/Loss": test_loss, "round": epoch})
+        stats = {'test_acc': test_acc, 'test_loss': test_loss}
+        logging.info(stats)
 
 
 def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_extracted_features):
@@ -230,12 +236,10 @@ def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_e
         # x, label_a, label_b, lam = mixup_data(x, labels)
         # logging.info(images.shape)
         optimizer.zero_grad()
-        if args.task_specific_layer_type == 0:
+        if args.task_specific_layer_num == 0:
             log_probs = model.head(x[:, 0])
-        elif args.task_specific_layer_type == 3:
-            log_probs = model.head(x, hidden_presentations)
         else:
-            log_probs = model.head(x)
+            log_probs = model.head(x, hidden_presentations)
         # print(log_probs.shape)
         # print(labels.shape)
         loss = criterion(log_probs, labels)
@@ -246,16 +250,19 @@ def train(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_data_e
         optimizer.step()
         scheduler.step()
         batch_loss.append(loss.item())
-        # if len(batch_loss) > 0:
-        #     epoch_loss.append(sum(batch_loss) / len(batch_loss))
-        #     logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
-        #                                                                       sum(epoch_loss) / len(epoch_loss)))
+        if len(batch_loss) > 0:
+            epoch_loss.append(sum(batch_loss) / len(batch_loss))
+            logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
+                                                                              sum(epoch_loss) / len(epoch_loss)))
 
 
 def train_from_raw_data(args, epoch, epoch_loss, criterion, optimizer, scheduler, train_dl):
     # training
     model.train()
     batch_loss = []
+
+    # time for a epoch in Image:
+    # from "Thu, 03 Dec 2020 00:48:39" - ""
     for batch_idx, (x, labels) in enumerate(train_dl):
         x = x.to(device)
         labels = labels.to(device)
@@ -268,10 +275,11 @@ def train_from_raw_data(args, epoch, epoch_loss, criterion, optimizer, scheduler
         optimizer.step()
         scheduler.step()
         batch_loss.append(loss.item())
-        # if len(batch_loss) > 0:
-        #     epoch_loss.append(sum(batch_loss) / len(batch_loss))
-        #     logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
-        #                                                                       sum(epoch_loss) / len(epoch_loss)))
+        if len(batch_loss) > 0:
+            epoch_loss.append(sum(batch_loss) / len(batch_loss))
+            logging.info('(Training Epoch: {}\tBatch:{}\tLoss: {:.6f}'.format(epoch, batch_idx,
+                                                                              sum(epoch_loss) / len(epoch_loss)))
+
 
 def train_and_eval(model, train_dl, test_dl, args, device):
     criterion = nn.CrossEntropyLoss().to(device)
@@ -406,9 +414,80 @@ def load_cifar_centralized_training_for_vit(args):
     return train_loader, test_loader
 
 
+def load_imagenet_centralized_training_for_vit(args):
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    """
+    the std 0.5 normalization is proposed by BiT (Big Transfer), which can increase the accuracy around 3%
+    """
+    # CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    # CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    CIFAR_MEAN = [0.5, 0.5, 0.5]
+    CIFAR_STD = [0.5, 0.5, 0.5]
+
+    """
+    transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)) leads to a very low training accuracy.
+    transforms.RandomSizedCrop() is deprecated.
+    The following two transforms are equal.
+    """
+    # transform_train = transforms.Compose([
+    #     # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+    #     transforms.RandomResizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+    #     # transforms.Resize(args.img_size),
+    #     # transforms.RandomCrop(args.img_size),
+    #     transforms.RandomHorizontalFlip(),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    # ])
+    transform_train = transforms.Compose([
+        # transforms.RandomSizedCrop((args.img_size, args.img_size), scale=(0.05, 1.0)),
+        transforms.Resize(args.img_size),
+        transforms.RandomCrop(args.img_size),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+
+    transform_test = transforms.Compose([
+        transforms.Resize((args.img_size, args.img_size)),
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    ])
+
+    trainset = ImageNet(data_dir=args.data_dir,
+                        train=True,
+                        download=True,
+                        transform=transform_train)
+    testset = ImageNet(data_dir=args.data_dir,
+                       train=False,
+                       download=True,
+                       transform=transform_test)
+
+    if args.is_distributed == 1:
+        torch.distributed.barrier()
+
+    train_sampler = RandomSampler(trainset) if args.is_distributed == 0 else DistributedSampler(trainset)
+    test_sampler = SequentialSampler(testset)
+    train_loader = DataLoader(trainset,
+                              sampler=train_sampler,
+                              batch_size=args.batch_size,
+                              num_workers=4,
+                              pin_memory=True)
+    test_loader = DataLoader(testset,
+                             sampler=test_sampler,
+                             batch_size=args.batch_size,
+                             num_workers=4,
+                             pin_memory=True) if testset is not None else None
+
+    return train_loader, test_loader
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch DDP Demo")
     parser.add_argument("--local_rank", type=int, default=0)
+
+    parser.add_argument("--global_rank", type=int, default=0)
 
     parser.add_argument('--model', type=str, default='transformer', metavar='N',
                         help='neural network used in training')
@@ -433,10 +512,10 @@ if __name__ == "__main__":
 
     parser.add_argument('--wd', help='weight decay parameter;', type=float, default=0.001)
 
-    parser.add_argument("--warmup_steps", default=3, type=int,
+    parser.add_argument("--warmup_steps", default=2, type=int,
                         help="Step of training to perform learning rate warmup for.")
 
-    parser.add_argument('--epochs', type=int, default=30, metavar='EP',
+    parser.add_argument('--epochs', type=int, default=10, metavar='EP',
                         help='how many epochs will be trained locally')
 
     parser.add_argument("--img_size", default=224, type=int,
@@ -479,6 +558,7 @@ if __name__ == "__main__":
     # DDP
     if args.is_distributed == 1:
         local_rank, global_rank = init_ddp()
+        args.global_rank = global_rank
     else:
         local_rank = args.local_rank
         global_rank = 0
@@ -502,9 +582,12 @@ if __name__ == "__main__":
     elif args.dataset == "cifar100":
         train_dl, test_dl = load_cifar_centralized_training_for_vit(args)
         class_num = 100
+    elif args.dataset == "imagenet":
+        logging.info("load_data. dataset_name = %s" % args.dataset)
+        train_dl, test_dl = load_imagenet_centralized_training_for_vit(args)
+        class_num = 1000
     else:
-        train_dl, test_dl = load_cifar_centralized_training_for_vit(args)
-        class_num = 10
+        raise Exception("no such dataset!")
 
     # Model
     model = create_model(args, model_name=args.model, output_dim=class_num)
