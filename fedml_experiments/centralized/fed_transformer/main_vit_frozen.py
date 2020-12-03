@@ -27,14 +27,14 @@ from fedml_api.distributed.fed_transformer.utils import count_parameters, Warmup
 from fedml_api.model.cv.transformer.vit.vision_transformer_task_specific_layer import VisionTransformer, CONFIGS
 
 
-def init_ddp():
+def init_ddp(args):
     # use InfiniBand
     os.environ['NCCL_DEBUG'] = 'INFO'
 
     # lab server
     # os.environ['NCCL_SOCKET_IFNAME'] = 'ib0'
     # chaoyang's personal server
-    os.environ['NCCL_SOCKET_IFNAME'] = 'lo'
+    os.environ['NCCL_SOCKET_IFNAME'] = args.if_name
 
     # This the global rank: 0, 1, 2, ..., 15
     global_rank = int(os.environ['RANK'])
@@ -485,6 +485,8 @@ def load_imagenet_centralized_training_for_vit(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch DDP Demo")
+    parser.add_argument("--if_name", type=str, default="ib0")
+
     parser.add_argument("--local_rank", type=int, default=0)
 
     parser.add_argument("--global_rank", type=int, default=0)
@@ -557,7 +559,7 @@ if __name__ == "__main__":
 
     # DDP
     if args.is_distributed == 1:
-        local_rank, global_rank = init_ddp()
+        local_rank, global_rank = init_ddp(args)
         args.global_rank = global_rank
     else:
         local_rank = args.local_rank
