@@ -1,10 +1,12 @@
 import logging
 import random
+from pathlib import Path
 
 import h5py
 import numpy as np
 import torch
 import torch.utils.data as data
+import os
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -13,19 +15,46 @@ logger.setLevel(logging.INFO)
 client_map = None
 DEFAULT_CLIENT_NUMBER = 3400
 DEFAULT_BATCH_SIZE = 20
-train_file_path = '../../../data/FederatedEMNIST/emnist_train.h5'
-test_file_path = '../../../data/FederatedEMNIST/emnist_test.h5'
+root = Path(os.path.abspath(__file__)).parents[3]
+DEFAULT_TRAIN_FILE_NAME = 'emnist_train.h5'
+DEFAULT_TEST_FILE_NAME = 'emnist_test.h5'
+DEFAULT_TRAIN_DIR = root / 'data/FederatedEMNIST/'
+
+
+def get_data_dir(data_dir: str) -> Path:
+    dir = Path(data_dir)
+    if not dir.exists():
+        raise ValueError('Data directory {0} not found'.format(dir))
+    return dir
+
+
+def get_data_file_path(filepath: Path) -> Path:
+    if not filepath.exists():
+        raise ValueError('Data file {0} not found'.format(filepath))
+    return filepath
+
+
+def get_train_file_path(data_dir: str, train_file_name=DEFAULT_TRAIN_FILE_NAME) -> str:
+    path = get_data_file_path(get_data_dir(data_dir) / train_file_name)
+    return str(path.absolute())
+
+
+def get_test_file_path(data_dir: str, test_file_name=DEFAULT_TEST_FILE_NAME) -> str:
+    path = get_data_file_path(get_data_dir(data_dir) / test_file_name)
+    return str(path.absolute())
 
 
 def get_client_map(client_id=None, client_num=None):
     global client_map
-    if client_map == None:
+    if client_map is None:
         random.shuffle(client_id)
         client_map = {k: [client_id[i] for i in range(k, len(client_id), client_num)] for k in range(client_num)}
     return client_map
 
 
-def get_dataloader(dataset, data_dir, train_bs, test_bs, client_idx=None):
+def get_dataloader(dataset, data_dir, train_bs, test_bs, client_idx = None):
+    train_file_path = get_train_file_path(data_dir)
+    test_file_path = get_test_file_path(data_dir)
     train_h5 = h5py.File(train_file_path, 'r')
     test_h5 = h5py.File(test_file_path, 'r')
     train_x, train_y, train_id = train_h5['pixels'], train_h5['label'], train_h5['id']
@@ -62,6 +91,8 @@ def get_dataloader(dataset, data_dir, train_bs, test_bs, client_idx=None):
 
 def load_partition_data_distributed_federated_emnist(process_id, dataset, data_dir, client_number=None,
                                                      batch_size=DEFAULT_BATCH_SIZE):
+    train_file_path = get_train_file_path(data_dir)
+    test_file_path = get_test_file_path(data_dir)
     if client_number is None:
         client_number = DEFAULT_CLIENT_NUMBER
 
@@ -94,6 +125,8 @@ def load_partition_data_distributed_federated_emnist(process_id, dataset, data_d
 
 
 def load_partition_data_federated_emnist(dataset, data_dir, client_number=None, batch_size=DEFAULT_BATCH_SIZE):
+    train_file_path = get_train_file_path(data_dir)
+    test_file_path = get_test_file_path(data_dir)
     if client_number is None:
         client_number = DEFAULT_CLIENT_NUMBER
 
@@ -103,6 +136,8 @@ def load_partition_data_federated_emnist(dataset, data_dir, client_number=None, 
 
     # get local dataset
     data_local_num_dict = dict()
+    data_local_train_num_dict = dict()
+    data_local_test_num_dict = dict()
     train_data_local_dict = dict()
     test_data_local_dict = dict()
     train_h5 = h5py.File(train_file_path, 'r')
@@ -114,6 +149,8 @@ def load_partition_data_federated_emnist(dataset, data_dir, client_number=None, 
         train_data_local, test_data_local = get_dataloader(dataset, data_dir, batch_size, batch_size, client_idx)
         local_data_num = len(train_data_local) + len(test_data_local)
         data_local_num_dict[client_idx] = local_data_num
+        data_local_train_num_dict[client_idx] = len(train_data_local)
+        data_local_test_num_dict[client_idx] = len(test_data_local)
         # logging.info("client_idx = %d, local_sample_number = %d" % (client_idx, local_data_num))
         # logging.info("client_idx = %d, batch_num_train_local = %d, batch_num_test_local = %d" % (
         #     client_idx, len(train_data_local), len(test_data_local)))
@@ -121,7 +158,8 @@ def load_partition_data_federated_emnist(dataset, data_dir, client_number=None, 
         test_data_local_dict[client_idx] = test_data_local
 
     return client_number, train_data_num, test_data_num, train_data_global, test_data_global, \
-           data_local_num_dict, train_data_local_dict, test_data_local_dict, class_num
+           data_local_num_dict, data_local_train_num_dict, data_local_test_num_dict, train_data_local_dict, \
+           test_data_local_dict, class_num
 
 
 def test_federated_emnist():
